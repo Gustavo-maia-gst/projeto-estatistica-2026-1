@@ -1,0 +1,63 @@
+% ---------------------------------------------------------------------------
+% Preamble ABNT — formatação de artigo acadêmico
+% ---------------------------------------------------------------------------
+
+% Idioma
+\usepackage{babel}
+\babelprovide[import, main]{brazilian}
+
+% Espaçamento entre linhas 1,5
+\usepackage{setspace}
+\onehalfspacing
+
+% Indentar primeiro parágrafo de cada seção (ABNT)
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+
+% Tabelas e figuras
+\usepackage{float}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf, justification=centering}
+
+% Cabeçalho e rodapé
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+% Formatação de seções
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\bfseries\Large}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\bfseries\large}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalfont\bfseries\normalsize}{\thesubsubsection}{1em}{}
+
+% Caixas coloridas para destaques (callout, warning, etc.)
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable}
+
+\newtcolorbox{calloutbox}{
+  colback=blue!5, colframe=blue!40!black,
+  breakable, left=4mm, right=4mm, top=2mm, bottom=2mm,
+  fontupper=\small
+}
+\newtcolorbox{warningbox}{
+  colback=orange!5, colframe=orange!60!black,
+  breakable, left=4mm, right=4mm, top=2mm, bottom=2mm,
+  fontupper=\small
+}
+\newtcolorbox{checkpointbox}{
+  colback=green!5, colframe=green!40!black,
+  breakable, left=4mm, right=4mm, top=2mm, bottom=2mm,
+  fontupper=\small
+}
+\newtcolorbox{decisionbox}{
+  colback=blue!8, colframe=blue!50!black,
+  breakable, left=4mm, right=4mm, top=2mm, bottom=2mm,
+  fontupper=\small
+}
+\newtcolorbox{teachernotebox}{
+  colback=gray!5, colframe=gray!50!black,
+  breakable, left=4mm, right=4mm, top=2mm, bottom=2mm,
+  fontupper=\small
+}
