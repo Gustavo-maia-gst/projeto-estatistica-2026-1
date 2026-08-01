@@ -150,7 +150,7 @@ tabela_coeficientes <- function(modelo) {
 ```
 
 ::: {.callout}
-**Ideia central.** Regressão múltipla não é uma sequência de botões. É um argumento científico: definimos uma pergunta, explicitamos um modelo, confrontamos suas suposições com os dados, avaliamos incerteza e só então comunicamos o que o modelo permite --- e o que ele não permite --- concluir.
+**Ideia central.** Regressão múltipla não é uma sequência de botões, é um argumento científico. Definimos uma pergunta, explicitamos um modelo, confrontamos suas suposições com os dados, avaliamos incerteza e só então comunicamos o que o modelo permite e o que ele não permite concluir.
 :::
 
 # Visão geral da análise
@@ -199,7 +199,7 @@ Esta análise foi estruturada para:
 
 # A pergunta vem antes do modelo
 
-Usaremos `Balance`, o saldo devedor do cartão de crédito, em dólares, como resposta. Queremos investigar e prever esse saldo a partir de todas as variáveis disponíveis — renda, limite de crédito, classificação de crédito, número de cartões, idade, anos de educação, gênero, condição de estudante, estado civil e etnia.
+Usaremos `Balance`, o saldo devedor do cartão de crédito, em dólares, como resposta. Queremos investigar e prever esse saldo a partir de todas as variáveis disponíveis: renda, limite de crédito, classificação de crédito, número de cartões, idade, anos de educação, gênero, condição de estudante, estado civil e etnia.
 
 Uma pergunta bem formulada seria:
 
@@ -344,7 +344,7 @@ ggplot(dados, aes(Student, Balance, color = Student)) +
   guides(fill = "none")
 ```
 
-**Leitura.** Há uma separação clara: estudantes carregam saldos devedores bem mais elevados do que não estudantes. Essa variável parece ter potencial para contribuir significativamente no modelo.
+Há uma separação clara. Os estudantes carregam saldos devedores bem mais elevados do que os não estudantes. Essa variável parece ter potencial para contribuir significativamente no modelo.
 
 ```{r boxplot-gender, fig.height=4.8, fig.cap="Saldo devedor por gênero."}
 ggplot(dados, aes(Gender, Balance, color = Gender)) +
@@ -361,7 +361,7 @@ ggplot(dados, aes(Gender, Balance, color = Gender)) +
   guides(fill = "none")
 ```
 
-**Leitura.** Não há separação visível entre os gêneros. As medianas, os quartis e a dispersão são praticamente idênticos. Provavelmente essa variável não contribuirá de forma significativa.
+Não há separação visível entre os gêneros. As medianas, os quartis e a dispersão são praticamente idênticos. Provavelmente essa variável não contribuirá de forma significativa.
 
 ```{r boxplot-married, fig.height=4.8, fig.cap="Saldo devedor por estado civil."}
 ggplot(dados, aes(Married, Balance, color = Married)) +
@@ -378,7 +378,7 @@ ggplot(dados, aes(Married, Balance, color = Married)) +
   guides(fill = "none")
 ```
 
-**Leitura.** As distribuições de casados e não casados se sobrepõem amplamente. Não há sinal de que o estado civil, por si só, esteja associado ao saldo devedor.
+As distribuições de casados e não casados se sobrepõem amplamente. Não há sinal de que o estado civil, por si só, esteja associado ao saldo devedor.
 
 ```{r boxplot-ethnicity, fig.height=4.8, fig.cap="Saldo devedor por etnia."}
 ggplot(dados, aes(Ethnicity, Balance, color = Ethnicity)) +
@@ -395,10 +395,10 @@ ggplot(dados, aes(Ethnicity, Balance, color = Ethnicity)) +
   guides(fill = "none")
 ```
 
-**Leitura.** As três etnias apresentam medianas, dispersões e formatos de distribuição muito semelhantes. A exploração gráfica não sugere uma associação relevante entre etnia e saldo devedor.
+As três etnias apresentam medianas, dispersões e formatos de distribuição muito semelhantes. A exploração gráfica não sugere uma associação relevante entre etnia e saldo devedor.
 
 ::: {.checkpoint}
-**Resumo da inspeção categórica.** Dos quatro preditores categóricos, apenas `Student` apresenta separação clara do saldo devedor. `Gender`, `Married` e `Ethnicity` não mostram diferenças visuais importantes. Essa observação será confirmada (ou não) pelos p-valores no modelo completo.
+**Resumo da inspeção categórica:** Dos quatro preditores categóricos, apenas `Student` apresenta separação clara do saldo devedor. `Gender`, `Married` e `Ethnicity` não mostram diferenças visuais importantes. Essa observação será confirmada (ou não) pelos p-valores no modelo completo.
 :::
 
 ## Relações bivariadas não contam a história completa
@@ -427,7 +427,7 @@ Dois padrões se destacam na matriz de correlação:
 2. `Balance` tem correlação forte com `Limit` (`r fmt_num(matriz_cor["Balance", "Limit"])`) e `Rating` (`r fmt_num(matriz_cor["Balance", "Rating"])`), moderada com `Income` (`r fmt_num(matriz_cor["Balance", "Income"])`), e fraca com `Cards`, `Age` e `Education`.
 
 ::: {.warning}
-**Correção de uma armadilha comum.** Dois preditores positivamente correlacionados não precisam ter coeficientes múltiplos com o mesmo sinal. Cada coeficiente é um efeito parcial, condicionado aos demais termos. Uma inversão de sinal pode revelar colinearidade, confundimento ou uma pergunta condicional diferente --- não uma contradição lógica automática.
+Dois preditores positivamente correlacionados não precisam ter coeficientes múltiplos com o mesmo sinal. Cada coeficiente é um efeito parcial, condicionado aos demais termos. Uma inversão de sinal pode revelar colinearidade, confundimento ou uma pergunta condicional diferente, não uma contradição lógica automática.
 :::
 
 ```{r relacao-agregada-grupos, fig.height=5.8, fig.cap="A linha agregada mistura diferenças entre estudantes e não estudantes e relações dentro de cada grupo."}
@@ -456,7 +456,7 @@ p_agregado + p_grupos
 
 # Construção progressiva dos cinco modelos
 
-A estratégia adotada é começar com um **modelo completo** contendo todas as variáveis disponíveis e, a cada passo, remover as que não contribuem de forma significativa — verificando com os p-valores, os gráficos exploratórios e, quando necessário, testes F. Ao final, chegaremos a um modelo enxuto e defensável.
+A estratégia adotada é começar com um **modelo completo** contendo todas as variáveis disponíveis e, a cada passo, remover as que não contribuem de forma significativa, verificando com os p-valores, os gráficos exploratórios e, quando necessário, testes F. Ao final, chegaremos a um modelo enxuto e defensável.
 
 Os cinco modelos serão ajustados com as `r nrow(dados)` observações. A decisão final será tomada somente depois que todos tiverem sido estimados, interpretados e comparados.
 
@@ -561,19 +561,19 @@ O modelo é globalmente significativo e apresenta $R^2$ ajustado igual a `r fmt_
 
 Dois problemas ficam evidentes:
 
-1. **Multicolinearidade severa entre `Limit` e `Rating`.** Os VIF dessas variáveis são extremamente altos — a correlação de `r fmt_num(cor(dados$Limit, dados$Rating))` faz com que cada uma possa ser quase perfeitamente reconstruída pela outra. Isso infla os erros-padrão e torna os coeficientes individuais instáveis. A solução é manter apenas uma delas; como `Limit` tem interpretação mais direta (é o próprio limite do cartão em dólares), **removeremos `Rating`** no próximo passo.
+1. **Multicolinearidade severa entre `Limit` e `Rating`.** Os VIF dessas variáveis são extremamente altos: a correlação de `r fmt_num(cor(dados$Limit, dados$Rating))` faz com que cada uma possa ser quase perfeitamente reconstruída pela outra. Isso infla os erros-padrão e torna os coeficientes individuais instáveis. A solução é manter apenas uma delas. Como `Limit` tem interpretação mais direta (é o próprio limite do cartão em dólares), **removeremos `Rating`** no próximo passo.
 
 2. **Muitas variáveis com p-valor alto.** Várias variáveis apresentam p-valores bem acima de 0,05, indicando que, condicionadas aos demais termos, não trazem evidência de contribuição para explicar o saldo devedor. Isso é coerente com a exploração gráfica, que já havia mostrado pouca separação para `Gender`, `Married` e `Ethnicity`.
 
 Regras como "VIF maior que 5 exige atenção" e "VIF maior que 10 indica colinearidade forte" são referências práticas, não leis universais. Aqui, os valores extremos de `Limit` e `Rating` e a correlação quase perfeita entre ambas contam uma história clara: os efeitos individuais dessas duas variáveis são impossíveis de separar com estabilidade.
 
 ::: {.warning}
-**Leitura correta da multicolinearidade.** O modelo ainda pode ajustar bem os dados. O principal prejuízo está na separação e interpretação dos efeitos individuais, nos erros-padrão e na estabilidade dos coeficientes.
+**Leitura correta da multicolinearidade:** O modelo ainda pode ajustar bem os dados. O principal prejuízo está na separação e interpretação dos efeitos individuais, nos erros-padrão e na estabilidade dos coeficientes.
 :::
 
 ## Modelo 2 — remoção de `Rating` (colinearidade)
 
-A multicolinearidade entre `Limit` e `Rating` é o problema mais urgente. Removemos `Rating` — a variável com interpretação menos direta — e mantemos todo o restante:
+A multicolinearidade entre `Limit` e `Rating` é o problema mais urgente. Removemos `Rating` (a variável com interpretação menos direta) e mantivemos todo o restante:
 
 ```{r modelo2}
 modelo2 <- lm(
@@ -612,7 +612,7 @@ Com a remoção de `Rating`, o problema de colinearidade foi resolvido: nenhum V
 
 Agora podemos examinar os p-valores com mais confiança, pois os erros-padrão não estão mais inflados pela colinearidade:
 
-- **`Student`** é altamente significativo — coerente com a separação clara nos boxplots.
+- **`Student`** é altamente significativo (coerente com a separação clara nos boxplots).
 - **`Income`** e **`Limit`** são significativos.
 - **`Gender`**, **`Married`**, **`Ethnicity`**, **`Education`**, **`Cards`** e **`Age`** apresentam p-valores altos, sem evidência de contribuição significativa.
 
@@ -638,7 +638,7 @@ tabela_coeficientes(modelo3) |>
 
 ### Comentários e observações sobre o Modelo 3
 
-O $R^2$ ajustado é `r fmt_num(summary(modelo3)$adj.r.squared)` — praticamente inalterado em relação ao Modelo 2 (`r fmt_num(summary(modelo2)$adj.r.squared)`). Remover três variáveis e cinco parâmetros não custou ajuste, confirmando que `Gender`, `Married` e `Ethnicity` eram irrelevantes para explicar o saldo.
+O $R^2$ ajustado é `r fmt_num(summary(modelo3)$adj.r.squared)` (praticamente inalterado em relação ao Modelo 2, que era `r fmt_num(summary(modelo2)$adj.r.squared)`). Remover três variáveis e cinco parâmetros não custou ajuste, confirmando que `Gender`, `Married` e `Ethnicity` eram irrelevantes para explicar o saldo.
 
 Ainda restam variáveis com p-valores altos: **`Education`**, **`Cards`** e **`Age`** não apresentam evidência de contribuição significativa. Removemos as três no próximo passo.
 
@@ -678,7 +678,7 @@ O $R^2$ ajustado é `r fmt_num(summary(modelo4)$adj.r.squared)`, praticamente id
 - Mantendo `Income` e `Student` constantes, cada US$ 1 adicional no limite está associado a `r fmt_num(coef(modelo4)["Limit"])` dólares a mais no saldo.
 - Controlando as variáveis financeiras, estudantes carregam em média `r fmt_num(coef(modelo4)["StudentYes"])` dólares a mais que não estudantes.
 
-A interpretação de `Income` é contraintuitiva à primeira vista — renda mais alta associada a menor dívida — mas faz sentido condicional: *dado o mesmo limite de crédito*, pessoas de maior renda tendem a usar uma fração menor do limite disponível.
+A interpretação de `Income` é contraintuitiva à primeira vista: a renda mais alta associada a menor dívida, porém, faz sentido condicional: *dado o mesmo limite de crédito*, pessoas de maior renda tendem a usar uma fração menor do limite disponível.
 
 ```{r vif-modelo4}
 vif_modelo4 <- performance::check_collinearity(modelo4) |>
@@ -805,10 +805,10 @@ anova(modelo4, modelo3)
 
 Os Modelos 4 e 5 não são aninhados (usam preditores diferentes), portanto o teste F não se aplica. A comparação se dá pelos critérios de ajuste da tabela: $R^2$ ajustado, AIC e BIC. Ambos produzem ajustes semelhantes, mas `Limit` tem interpretação mais direta.
 
-Em cada comparação aninhada, um p-valor alto indica que as variáveis removidas não acrescentavam ajuste significativo — confirmando a decisão de simplificar. O teste F responde a uma pergunta pontual — "este termo melhora este modelo reduzido?" — e só pode ser usado para modelos aninhados. AIC, BIC e $R^2$ ajustado comparam o equilíbrio geral entre ajuste e complexidade.
+Em cada comparação aninhada, um p-valor alto indica que as variáveis removidas não acrescentavam ajuste significativo, confirmando a decisão de simplificar. O teste F responde a uma pergunta pontual: "este termo melhora este modelo reduzido?". E ele só pode ser usado para modelos aninhados. AIC, BIC e $R^2$ ajustado comparam o equilíbrio geral entre ajuste e complexidade.
 
 ::: {.decision}
-**Modelo final: Modelo 4 --- `Balance ~ Income + Limit + Student`.** Partimos de um modelo completo com dez preditores e, a cada passo, verificamos que as variáveis removidas não contribuíam significativamente. O Modelo 4 mantém $R^2$ ajustado de `r fmt_num(summary(modelo4)$adj.r.squared)`, o menor BIC (`r fmt_num(BIC(modelo4), 2)`) e apenas três preditores --- todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirma que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade. A simplificação progressiva é confirmada tanto pelos testes F quanto pela estabilidade do $R^2$ ajustado.
+**Modelo final: Modelo 4 --- `Balance ~ Income + Limit + Student`.** Partimos de um modelo completo com dez preditores e, a cada passo, verificamos que as variáveis removidas não contribuíam significativamente. O Modelo 4 mantém $R^2$ ajustado de `r fmt_num(summary(modelo4)$adj.r.squared)`, o menor BIC (`r fmt_num(BIC(modelo4), 2)`) e apenas três preditores, todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirma que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade. A simplificação progressiva é confirmada tanto pelos testes F quanto pela estabilidade do $R^2$ ajustado.
 :::
 
 # Diagnóstico completo dos resíduos
@@ -1041,7 +1041,7 @@ knitr::kable(comparacao_sensibilidade, digits = 3) |>
 
 Foram sinalizadas `r length(ids_sensiveis)` observações. Ao retirá-las apenas para esta análise de sensibilidade, o $R^2$ ajustado passa de `r fmt_num(summary(modelo_diagnostico)$adj.r.squared)` para `r fmt_num(summary(modelo_sem_sensiveis)$adj.r.squared)` e o erro residual passa de `r fmt_num(summary(modelo_diagnostico)$sigma)` para `r fmt_num(summary(modelo_sem_sensiveis)$sigma)`. Essa aparente "melhora" é esperada quando removemos pontos com resíduos maiores; ela **não** prova que o modelo sem esses clientes é melhor ou que eles devam ser excluídos.
 
-Os coeficientes permanecem próximos, como mostra a tabela. Portanto, o Modelo 4 com as `r nrow(dados)` observações continua sendo o resultado principal. Uma observação só deveria ser removida se houver evidência independente de erro de registro, de que ela não pertence à população estudada ou uma regra definida antes da análise — nunca apenas por cruzar a linha laranja, ter resíduo grande ou ficar dentro/fora do envelope.
+Os coeficientes permanecem próximos, como mostra a tabela. Portanto, o Modelo 4 com as `r nrow(dados)` observações continua sendo o resultado principal. Uma observação só deveria ser removida se houver evidência independente de erro de registro, de que ela não pertence à população estudada ou uma regra definida antes da análise, nunca apenas por cruzar a linha laranja, ter resíduo grande ou ficar dentro/fora do envelope.
 
 # Previsão e incerteza
 
@@ -1083,18 +1083,18 @@ Para uma previsão individual, use o intervalo de previsão. Usar o intervalo de
 :::
 
 ::: {.teacher-note}
-**Dica para uma análise voltada à previsão.** Em um projeto preditivo, separe os dados logo no início em duas bases: **treinamento** e **teste**. Use somente a base de treinamento para explorar os dados, ajustar os modelos, comparar especificações e diagnosticar resíduos --- ou seja, para realizar todo o percurso apresentado até aqui. Guarde a base de teste sem usá-la nesse processo. Ao final, aplique `predict()` ao conjunto de teste e compare as previsões com os valores verdadeiros de `Balance`, por exemplo com RQME, MAE e gráficos de observado versus previsto. Essa avaliação mostra como o modelo se comporta em clientes que não participaram do ajuste. Nesta aula, a base completa foi usada para privilegiar a explicação e a inferência; a divisão é uma extensão recomendada quando a finalidade principal for previsão.
+**Dica para uma análise voltada à previsão:** Em um projeto preditivo, separe os dados logo no início em duas bases: **treinamento** e **teste**. Use somente a base de treinamento para explorar os dados, ajustar os modelos, comparar especificações e diagnosticar resíduos. Ou seja, para realizar todo o percurso apresentado até aqui. Guarde a base de teste sem usá-la nesse processo. Ao final, aplique `predict()` ao conjunto de teste e compare as previsões com os valores verdadeiros de `Balance`, por exemplo com RQME, MAE e gráficos de observado versus previsto. Essa avaliação mostra como o modelo se comporta em clientes que não participaram do ajuste. Nesta aula, a base completa foi usada para privilegiar a explicação e a inferência; a divisão é uma extensão recomendada quando a finalidade principal for previsão.
 :::
 
 # Conclusões finais
 
 ## Síntese da exploração
 
-A base contém `r nrow(dados)` clientes, sem valores ausentes. `Limit` e `Rating` são fortemente correlacionadas entre si ($r\approx`r fmt_num(cor(dados$Limit, dados$Rating))`$), o que explica a multicolinearidade observada no modelo completo. A exploração gráfica mostrou que, entre as variáveis categóricas, apenas `Student` separa marcantemente os saldos devedores; `Gender`, `Married` e `Ethnicity` não apresentaram diferenças visuais relevantes — o que foi confirmado pelos p-valores e testes F ao longo da simplificação. Entre as variáveis numéricas, `Education`, `Cards` e `Age` não mostraram contribuição significativa na presença de `Income` e `Limit`.
+A base contém `r nrow(dados)` clientes, sem valores ausentes. `Limit` e `Rating` são fortemente correlacionadas entre si ($r\approx`r fmt_num(cor(dados$Limit, dados$Rating))`$), o que explica a multicolinearidade observada no modelo completo. A exploração gráfica mostrou que, entre as variáveis categóricas, apenas `Student` separa marcantemente os saldos devedores; `Gender`, `Married` e `Ethnicity` não apresentaram diferenças visuais relevantes, o que foi confirmado pelos p-valores e testes F ao longo da simplificação. Entre as variáveis numéricas, `Education`, `Cards` e `Age` não mostraram contribuição significativa na presença de `Income` e `Limit`.
 
 ## Decisão e interpretação
 
-Partimos de um modelo completo com dez preditores e o simplificamos progressivamente, removendo a cada passo as variáveis que não contribuíam significativamente. A cada remoção, o $R^2$ ajustado permaneceu estável e os testes F confirmaram que os termos removidos não acrescentavam informação. O resultado é o **Modelo 4**, com apenas três preditores — todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirmou que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade.
+Partimos de um modelo completo com dez preditores e o simplificamos progressivamente, removendo a cada passo as variáveis que não contribuíam significativamente. A cada remoção, o $R^2$ ajustado permaneceu estável e os testes F confirmaram que os termos removidos não acrescentavam informação. O resultado é o **Modelo 4**, com apenas três preditores, todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirmou que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade.
 
 No Modelo 4:
 
@@ -1117,8 +1117,8 @@ A independência não pode ser estabelecida apenas com a base. Se houver vários
 
 ## Conclusão substantiva
 
-O saldo devedor do cartão de crédito está positivamente associado ao limite de crédito e à condição de estudante. A renda, depois de controlado o limite, apresenta associação negativa com o saldo: entre clientes com o mesmo limite, maior renda está ligada a menor endividamento. As demais variáveis disponíveis — classificação de crédito (removida por colinearidade com o limite), gênero, estado civil, etnia, anos de educação, número de cartões e idade — não demonstraram contribuição independente significativa.
+O saldo devedor do cartão de crédito está positivamente associado ao limite de crédito e à condição de estudante. A renda, depois de controlado o limite, apresenta associação negativa com o saldo: entre clientes com o mesmo limite, maior renda está ligada a menor endividamento. As demais variáveis disponíveis: classificação de crédito (removida por colinearidade com o limite), gênero, estado civil, etnia, anos de educação, número de cartões e idade não demonstraram contribuição independente significativa.
 
-A simplificação progressiva — de dez para três preditores sem perda de ajuste — ilustra um princípio central da modelagem: mais variáveis não significam necessariamente um modelo melhor. Um modelo parcimonioso, com poucas variáveis bem justificadas, é mais interpretável, mais estável e menos sujeito a sobreajuste. O Modelo 5, com `Rating` no lugar de `Limit`, mostrou que as duas variáveis colineares carregam informação equivalente, validando a escolha de `Limit` pela interpretabilidade.
+A simplificação progressiva (de dez para três preditores sem perda de ajuste) ilustra um princípio central da modelagem: mais variáveis não significam necessariamente um modelo melhor. Um modelo parcimonioso, com poucas variáveis bem justificadas, é mais interpretável, mais estável e menos sujeito a sobreajuste. O Modelo 5, com `Rating` no lugar de `Limit`, mostrou que as duas variáveis colineares carregam informação equivalente, validando a escolha de `Limit` pela interpretabilidade.
 
 As conclusões são **associativas, não causais**. A base Credit é observacional e não contém detalhes suficientes do desenho da coleta para sustentar afirmações de causa e efeito.
