@@ -3,6 +3,15 @@ title: "Regressão Linear Múltipla — Análise Completa da Base Credit"
 author: "Gustavo Maia Nogueira e Telmano Leite Japiassú Neto"
 date: "`r format(Sys.Date(), '%d/%m/%Y')`"
 output:
+  pdf_document:
+    toc: false
+    number_sections: true
+    fig_caption: true
+    keep_tex: false
+    latex_engine: pdflatex
+    includes:
+      in_header: preamble-abnt.tex
+    pandoc_args: ["--lua-filter=filtro-divs.lua"]
   html_document:
     theme: flatly
     toc: false
@@ -13,15 +22,6 @@ output:
     self_contained: true
     df_print: paged
     css: tutorial_regressao_multipla.css
-  pdf_document:
-    toc: false
-    number_sections: true
-    fig_caption: true
-    keep_tex: false
-    latex_engine: pdflatex
-    includes:
-      in_header: preamble-abnt.tex
-    pandoc_args: ["--lua-filter=filtro-divs.lua"]
 geometry:
   - a4paper
   - top=3cm
@@ -29,6 +29,9 @@ geometry:
   - left=3cm
   - right=2cm
 subtitle: Estatística Aplicada — Universidade Federal de Campina Grande (UFCG)
+bibliography: referencias.bib
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/associacao-brasileira-de-normas-tecnicas.csl
+nocite: '@*'
 ---
 
 ```{r setup, include=FALSE}
@@ -266,6 +269,15 @@ glimpse(dados)
 
 Cada linha representa um cliente; o saldo devedor está em dólares. Há `r nrow(dados)` observações.
 
+```{r split-treino-teste}
+set.seed(42)
+idx_treino <- sample(nrow(dados), size = floor(0.7 * nrow(dados)))
+treino <- dados[ idx_treino, ]
+teste  <- dados[-idx_treino, ]
+```
+
+Os dados foram divididos em **`r nrow(treino)` observações de treinamento** (70%) e **`r nrow(teste)` de teste** (30%). Toda a exploração, ajuste e seleção de modelos usará apenas o conjunto de treinamento. O conjunto de teste fica reservado para avaliação final da capacidade preditiva do modelo escolhido.
+
 ```{r dicionario}
 dicionario <- tibble::tribble(
   ~variavel, ~tipo, ~papel, ~definicao,
@@ -458,7 +470,7 @@ p_agregado + p_grupos
 
 A estratégia adotada é começar com um **modelo completo** contendo todas as variáveis disponíveis e, a cada passo, remover as que não contribuem de forma significativa, verificando com os p-valores, os gráficos exploratórios e, quando necessário, testes F. Ao final, chegaremos a um modelo enxuto e defensável.
 
-Os cinco modelos serão ajustados com as `r nrow(dados)` observações. A decisão final será tomada somente depois que todos tiverem sido estimados, interpretados e comparados.
+Os cinco modelos serão ajustados com as `r nrow(treino)` observações do conjunto de treinamento. A decisão final será tomada somente depois que todos tiverem sido estimados, interpretados e comparados.
 
 ## Como ler a saída de `lm()`
 
@@ -514,7 +526,7 @@ O primeiro ajuste inclui **todos** os preditores disponíveis. A ideia é partir
 modelo1 <- lm(
   Balance ~ Income + Limit + Rating + Cards + Age + Education +
     Gender + Student + Married + Ethnicity,
-  data = dados
+  data = treino
 )
 
 summary(modelo1)
@@ -579,7 +591,7 @@ A multicolinearidade entre `Limit` e `Rating` é o problema mais urgente. Remove
 modelo2 <- lm(
   Balance ~ Income + Limit + Cards + Age + Education +
     Gender + Student + Married + Ethnicity,
-  data = dados
+  data = treino
 )
 
 summary(modelo2)
@@ -625,7 +637,7 @@ A exploração gráfica mostrou que essas três variáveis categóricas não sep
 ```{r modelo3}
 modelo3 <- lm(
   Balance ~ Income + Limit + Cards + Age + Education + Student,
-  data = dados
+  data = treino
 )
 
 summary(modelo3)
@@ -649,7 +661,7 @@ As variáveis `Education`, `Cards` e `Age` apresentaram p-valores altos no Model
 ```{r modelo4}
 modelo4 <- lm(
   Balance ~ Income + Limit + Student,
-  data = dados
+  data = treino
 )
 
 summary(modelo4)
@@ -705,7 +717,7 @@ No Modelo 1, removemos `Rating` por causa da colinearidade com `Limit`. Mas e se
 ```{r modelo5}
 modelo5 <- lm(
   Balance ~ Income + Rating + Student,
-  data = dados
+  data = treino
 )
 
 summary(modelo5)
@@ -725,7 +737,7 @@ O $R^2$ ajustado é `r fmt_num(summary(modelo5)$adj.r.squared)`, comparável ao 
 Mudar a referência altera a forma dos coeficientes, mas não altera resíduos, valores ajustados, $R^2$, AIC ou BIC.
 
 ```{r mudanca-referencia}
-dados_ref_yes <- dados |>
+dados_ref_yes <- treino |>
   mutate(Student = relevel(Student, ref = "Yes"))
 
 modelo4_ref_yes <- lm(
@@ -818,11 +830,11 @@ O Modelo 4, selecionado como modelo final, será usado para a análise detalhada
 ```{r modelo-diagnostico}
 modelo_diagnostico <- modelo4
 
-diag <- augment(modelo_diagnostico, data = dados) |>
+diag <- augment(modelo_diagnostico, data = treino) |>
   mutate(
     indice = row_number(),
-    cook_limite = 4 / nrow(dados),
-    leverage_limite = 2 * length(coef(modelo_diagnostico)) / nrow(dados)
+    cook_limite = 4 / nrow(treino),
+    leverage_limite = 2 * length(coef(modelo_diagnostico)) / nrow(treino)
   )
 ```
 
@@ -911,7 +923,7 @@ tibble(
   mutate(across(where(is.numeric), ~ round(.x, 4)))
 ```
 
-O teste de Shapiro–Wilk apresentou p-valor `r fmt_num(teste_shapiro$p.value, 4)`. Este resultado deve ser interpretado em conjunto com o QQ-plot. Com amostras de `r nrow(dados)` observações, testes podem detectar desvios irrelevantes do ponto de vista prático. Por isso, o gráfico e o teste devem ser lidos em conjunto.
+O teste de Shapiro–Wilk apresentou p-valor `r fmt_num(teste_shapiro$p.value, 4)`. Este resultado deve ser interpretado em conjunto com o QQ-plot. Com amostras de `r nrow(treino)` observações, testes podem detectar desvios irrelevantes do ponto de vista prático. Por isso, o gráfico e o teste devem ser lidos em conjunto.
 
 ### Alavancagem e influência
 
@@ -919,7 +931,7 @@ O quarto gráfico combina três informações. A **alavancagem**, no eixo horizo
 
 Uma observação com alavancagem alta não é automaticamente problemática: ela pode seguir perfeitamente a tendência. Uma observação com resíduo grande também pode ter pouca influência se estiver em uma região muito povoada dos preditores. A maior preocupação ocorre quando alavancagem alta e resíduo grande aparecem juntos, produzindo distância de Cook elevada.
 
-Usando apenas referências de triagem, `r sum(diag$.hat > unique(diag$leverage_limite))` observações ultrapassam $2p/n=`r fmt_num(unique(diag$leverage_limite), 3)`$ e `r sum(diag$.cooksd > 4 / nrow(dados))` ultrapassam $4/n=`r fmt_num(4 / nrow(dados), 3)`$ para a distância de Cook. A maior distância de Cook é `r fmt_num(max(diag$.cooksd), 3)`.
+Usando apenas referências de triagem, `r sum(diag$.hat > unique(diag$leverage_limite))` observações ultrapassam $2p/n=`r fmt_num(unique(diag$leverage_limite), 3)`$ e `r sum(diag$.cooksd > 4 / nrow(treino))` ultrapassam $4/n=`r fmt_num(4 / nrow(treino), 3)`$ para a distância de Cook. A maior distância de Cook é `r fmt_num(max(diag$.cooksd), 3)`.
 
 ### Independência
 
@@ -940,10 +952,10 @@ ggplot(diag, aes(indice, .resid)) +
 ### Investigando as observações sinalizadas
 
 ```{r influentes}
-influentes <- augment(modelo_diagnostico, data = dados) |>
+influentes <- augment(modelo_diagnostico, data = treino) |>
   mutate(
-    id = dados$id,
-    limiar_cook = 4 / nrow(dados),
+    id = treino$id,
+    limiar_cook = 4 / nrow(treino),
     sinalizada = .cooksd > limiar_cook | abs(.std.resid) > 2
   ) |>
   arrange(desc(.cooksd)) |>
@@ -1005,7 +1017,7 @@ ids_sensiveis <- influentes |>
 
 modelo_sem_sensiveis <- lm(
   formula(modelo_diagnostico),
-  data = dados |> filter(!id %in% ids_sensiveis)
+  data = treino |> filter(!id %in% ids_sensiveis)
 )
 
 metricas_sensibilidade <- tibble(
@@ -1041,7 +1053,7 @@ knitr::kable(comparacao_sensibilidade, digits = 3) |>
 
 Foram sinalizadas `r length(ids_sensiveis)` observações. Ao retirá-las apenas para esta análise de sensibilidade, o $R^2$ ajustado passa de `r fmt_num(summary(modelo_diagnostico)$adj.r.squared)` para `r fmt_num(summary(modelo_sem_sensiveis)$adj.r.squared)` e o erro residual passa de `r fmt_num(summary(modelo_diagnostico)$sigma)` para `r fmt_num(summary(modelo_sem_sensiveis)$sigma)`. Essa aparente "melhora" é esperada quando removemos pontos com resíduos maiores; ela **não** prova que o modelo sem esses clientes é melhor ou que eles devam ser excluídos.
 
-Os coeficientes permanecem próximos, como mostra a tabela. Portanto, o Modelo 4 com as `r nrow(dados)` observações continua sendo o resultado principal. Uma observação só deveria ser removida se houver evidência independente de erro de registro, de que ela não pertence à população estudada ou uma regra definida antes da análise, nunca apenas por cruzar a linha laranja, ter resíduo grande ou ficar dentro/fora do envelope.
+Os coeficientes permanecem próximos, como mostra a tabela. Portanto, o Modelo 4 ajustado com as `r nrow(treino)` observações de treinamento continua sendo o resultado principal. Uma observação só deveria ser removida se houver evidência independente de erro de registro, de que ela não pertence à população estudada ou uma regra definida antes da análise, nunca apenas por cruzar a linha laranja, ter resíduo grande ou ficar dentro/fora do envelope.
 
 # Previsão e incerteza
 
@@ -1082,8 +1094,46 @@ bind_rows(
 Para uma previsão individual, use o intervalo de previsão. Usar o intervalo de confiança da média nesse caso produz uma faixa estreita demais e aumenta a chance de não conter o valor individual observado.
 :::
 
-::: {.teacher-note}
-**Dica para uma análise voltada à previsão:** Em um projeto preditivo, separe os dados logo no início em duas bases: **treinamento** e **teste**. Use somente a base de treinamento para explorar os dados, ajustar os modelos, comparar especificações e diagnosticar resíduos. Ou seja, para realizar todo o percurso apresentado até aqui. Guarde a base de teste sem usá-la nesse processo. Ao final, aplique `predict()` ao conjunto de teste e compare as previsões com os valores verdadeiros de `Balance`, por exemplo com RQME, MAE e gráficos de observado versus previsto. Essa avaliação mostra como o modelo se comporta em clientes que não participaram do ajuste. Nesta aula, a base completa foi usada para privilegiar a explicação e a inferência; a divisão é uma extensão recomendada quando a finalidade principal for previsão.
+# Avaliação no conjunto de teste
+
+Todo o percurso anterior foi realizado exclusivamente com o conjunto de **treinamento**. Agora aplicamos o Modelo 4 final ao conjunto de **teste**, `r nrow(teste)` clientes que o modelo ainda não teve acesso, para avaliar sua capacidade preditiva em novas amostras.
+
+```{r avaliacao-teste}
+previsoes_teste <- predict(modelo4, newdata = teste)
+
+metricas_teste <- tibble(
+  metrica = c("RQME (Erro quadrático médio residual)", "EAM (Erro absoluto médio)", "R² no teste"),
+  valor = c(
+    sqrt(mean((teste$Balance - previsoes_teste)^2)),
+    mean(abs(teste$Balance - previsoes_teste)),
+    1 - sum((teste$Balance - previsoes_teste)^2) /
+        sum((teste$Balance - mean(teste$Balance))^2)
+  )
+)
+
+knitr::kable(metricas_teste, digits = 3) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
+                latex_options = c("hold_position"))
+```
+
+```{r grafico-obs-vs-previsto}
+tibble(
+  observado = teste$Balance,
+  previsto  = previsoes_teste
+) |>
+  ggplot(aes(x = previsto, y = observado)) +
+  geom_point(alpha = 0.55, color = azul, size = 1.8) +
+  geom_abline(slope = 1, intercept = 0, color = dourado, linewidth = 0.9, linetype = 2) +
+  labs(
+    title = "Observado vs. previsto — conjunto de teste",
+    subtitle = "Linha tracejada: previsão perfeita",
+    x = "Previsto pelo Modelo 4",
+    y = "Balance observado (US$)"
+  )
+```
+
+::: {.checkpoint}
+O R² no teste mede o quanto da variância de `Balance` o modelo explica em clientes que **não participaram do ajuste**. Um R² alto e RQME próximo ao erro-padrão residual do treinamento indicam que o modelo generaliza bem e não está sobreajustado.
 :::
 
 # Conclusões finais
@@ -1122,3 +1172,5 @@ O saldo devedor do cartão de crédito está positivamente associado ao limite d
 A simplificação progressiva (de dez para três preditores sem perda de ajuste) ilustra um princípio central da modelagem: mais variáveis não significam necessariamente um modelo melhor. Um modelo parcimonioso, com poucas variáveis bem justificadas, é mais interpretável, mais estável e menos sujeito a sobreajuste. O Modelo 5, com `Rating` no lugar de `Limit`, mostrou que as duas variáveis colineares carregam informação equivalente, validando a escolha de `Limit` pela interpretabilidade.
 
 As conclusões são **associativas, não causais**. A base Credit é observacional e não contém detalhes suficientes do desenho da coleta para sustentar afirmações de causa e efeito.
+
+# Referências

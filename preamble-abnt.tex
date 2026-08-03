@@ -2,6 +2,12 @@
 % Preamble ABNT — formatação de artigo acadêmico
 % ---------------------------------------------------------------------------
 
+% Corrigir bug booktabs + longtable: o lookahead por "(" em \@BLTrule
+% confunde conteúdo como "(Intercept)" com argumento de kerning do cmidrule.
+\makeatletter
+\def\@BLTrule{\@@BLTrule()}
+\makeatother
+
 % Idioma
 \usepackage{babel}
 \babelprovide[import, main]{brazilian}
