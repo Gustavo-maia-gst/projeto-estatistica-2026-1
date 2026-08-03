@@ -3,15 +3,6 @@ title: "Regressão Linear Múltipla — Análise Completa da Base Credit"
 author: "Gustavo Maia Nogueira e Telmano Leite Japiassú Neto"
 date: "`r format(Sys.Date(), '%d/%m/%Y')`"
 output:
-  pdf_document:
-    toc: false
-    number_sections: true
-    fig_caption: true
-    keep_tex: false
-    latex_engine: pdflatex
-    includes:
-      in_header: preamble-abnt.tex
-    pandoc_args: ["--lua-filter=filtro-divs.lua"]
   html_document:
     theme: flatly
     toc: false
@@ -22,6 +13,15 @@ output:
     self_contained: true
     df_print: paged
     css: tutorial_regressao_multipla.css
+  pdf_document:
+    toc: false
+    number_sections: true
+    fig_caption: true
+    keep_tex: false
+    latex_engine: pdflatex
+    includes:
+      in_header: preamble-abnt.tex
+    pandoc_args: ["--lua-filter=filtro-divs.lua"]
 geometry:
   - a4paper
   - top=3cm
@@ -53,6 +53,7 @@ knitr::opts_chunk$set(
   fig.height = 5.6,
   dpi = 140,
   out.width = if (is_pdf) "90%" else "100%",
+  fig.pos = if (is_pdf) "H" else NULL,
   cache = FALSE
 )
 
@@ -145,114 +146,47 @@ tabela_coeficientes <- function(modelo) {
       estimativa = estimate,
       `erro-padrão` = std.error,
       estatistica_t = statistic,
-      `p-valor` = p.value,
-      `IC 95% inferior` = conf.low,
-      `IC 95% superior` = conf.high
+      `p-valor` = fmt_p(p.value),
+      `IC 95%` = paste0("[", fmt_num(conf.low), "; ", fmt_num(conf.high), "]")
     )
+}
+
+tabela_resumo_modelo <- function(modelo) {
+  s <- summary(modelo)
+  g <- glance(modelo)
+  tibble(
+    `R²` = s$r.squared,
+    `R² ajustado` = s$adj.r.squared,
+    `Erro-padrão residual` = s$sigma,
+    `Estatística F` = g$statistic,
+    `p-valor (F)` = g$p.value,
+    `Parâmetros` = length(coef(modelo))
+  ) |>
+    knitr::kable(digits = 4) |>
+    kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
+                  latex_options = c("hold_position"))
 }
 ```
 
-::: {.callout}
-**Ideia central.** Regressão múltipla não é uma sequência de botões, é um argumento científico. Definimos uma pergunta, explicitamos um modelo, confrontamos suas suposições com os dados, avaliamos incerteza e só então comunicamos o que o modelo permite e o que ele não permite concluir.
-:::
+# Introdução
 
-# Visão geral da análise
-
-## Preparação do ambiente
-
-Instale os pacotes uma única vez. Depois, abra o arquivo `.Rmd` no RStudio e use **Knit**, ou execute `rmarkdown::render()`. No HTML, os códigos ficam recolhidos: clique em **Code** para visualizá-los. Para reproduzir ou alterar a análise, execute/renderize o documento inteiro na ordem apresentada, pois cada etapa usa objetos criados nas etapas anteriores.
-
-```{r instalar-pacotes, eval=FALSE}
-install.packages(c(
-  "rmarkdown", "knitr", "ggplot2", "dplyr", "tidyr", "purrr",
-  "broom", "performance", "patchwork", "GGally",
-  "kableExtra", "DT"
-))
-
-rmarkdown::render("tutorial_regressao_multipla_credit.Rmd")
-```
-
-## Objetivos da análise
-
-Esta análise foi estruturada para:
-
-1. transformar uma pergunta substantiva em uma equação de regressão;
-2. distinguir variável resposta, preditores numéricos e preditores categóricos;
-3. realizar uma análise exploratória orientada ao modelo;
-4. ajustar e interpretar uma regressão linear múltipla em R;
-5. verificar linearidade, independência, homocedasticidade, normalidade aproximada, multicolinearidade e influência;
-6. comparar cinco modelos usando teste F, $R^2$ ajustado, AIC, BIC e parcimônia;
-7. interpretar corretamente variáveis categóricas e categorias de referência;
-8. diferenciar intervalo de confiança da média e intervalo de previsão individual;
-9. reconhecer multicolinearidade, extrapolação e linguagem causal indevida;
-10. selecionar um modelo com base no conjunto das evidências e produzir uma conclusão defensável.
-
-## O mapa do processo
-
-| Etapa | Pergunta que guia a etapa | Produto |
-|---|---|---|
-| 1. Problema | O que queremos explicar ou prever? | pergunta, população e unidade de análise |
-| 2. Dados | As variáveis medem o que precisamos? | dicionário, qualidade e exploração |
-| 3. Especificação | Que relação estamos supondo? | fórmula, termos e interações justificadas |
-| 4. Ajuste | Quais coeficientes melhor reproduzem os dados? | modelo estimado e incerteza |
-| 5. Comparação preliminar | Qual modelo tem melhor ajuste e quais termos acrescentam informação? | tabela comparativa, teste F e candidato ao diagnóstico |
-| 6. Diagnóstico | O candidato respeita os pressupostos de forma razoável? | resíduos, influência, VIF e gráficos auxiliares |
-| 7. Decisão | Qual especificação é mais defensável para cada objetivo? | melhor ajuste, alternativa interpretável e justificativa |
-| 8. Comunicação | O que aprendemos e com quais limites? | conclusão, intervalos e próximos passos |
-
-# A pergunta vem antes do modelo
-
-Usaremos `Balance`, o saldo devedor do cartão de crédito, em dólares, como resposta. Queremos investigar e prever esse saldo a partir de todas as variáveis disponíveis: renda, limite de crédito, classificação de crédito, número de cartões, idade, anos de educação, gênero, condição de estudante, estado civil e etnia.
-
-Uma pergunta bem formulada seria:
+O objetivo deste trabalho é investigar quais fatores estão associados ao saldo devedor do cartão de crédito de clientes bancários e avaliar se modelos de regressão linear múltipla são capazes de prever esse saldo com base em variáveis financeiras e demográficas. Formulamos a pergunta central como:
 
 > Entre clientes com o mesmo perfil financeiro e demográfico, como o saldo devedor esperado varia com cada preditor, e quão bem o modelo prevê novos clientes?
 
-Essa frase já contém duas metas diferentes:
+Essa formulação envolve dois objetivos complementares: por um lado, interpretar as relações condicionais entre preditores e resposta (inferência); por outro, estimar valores para novas observações com baixo erro (previsão). Partimos de um modelo completo com todos os preditores disponíveis e o simplificamos progressivamente, removendo variáveis que não contribuíam de forma significativa, até chegar a uma especificação parcimoniosa e defensável.
 
-- **inferência/explicação:** interpretar relações condicionais e sua incerteza;
-- **previsão:** estimar valores para novas observações com baixo erro.
-
-::: {.warning}
-**"Melhor modelo" não é uma propriedade absoluta.** Um modelo pode ser excelente para previsão e ruim para interpretação; outro pode ser transparente e estável, mas perder um pouco de acurácia. Antes de comparar modelos, declare o objetivo.
-:::
-
-## O modelo matemático
-
-A estratégia será começar com um modelo que inclui **todos** os preditores disponíveis e, progressivamente, remover variáveis que não contribuem de forma significativa. Para a observação $i$, o modelo completo inicial é
+Para a observação $i$, o modelo geral que adotamos é
 
 $$
 Y_i = \beta_0 + \beta_1 X_{1i} + \cdots + \beta_p X_{pi} + \varepsilon_i,
 $$
 
-em que:
+em que $Y_i$ é o saldo devedor observado, $\beta_0$ é o valor esperado de $Y$ quando os preditores valem zero, $\beta_j$ é a mudança média esperada em $Y$ para uma unidade adicional de $X_j$ **mantendo os demais preditores constantes**, e $\varepsilon_i$ representa tudo o que o modelo não explica. Quando incluímos variáveis categóricas, o R cria variáveis indicadoras (*dummies*) comparando cada nível com uma categoria de referência.
 
-- $Y_i$ é o saldo devedor observado no cartão de crédito;
-- $\beta_0$ é o valor esperado de $Y$ quando os preditores valem zero;
-- $\beta_j$ é a mudança média esperada em $Y$ para uma unidade adicional de $X_j$, **mantendo os demais preditores constantes**;
-- $\varepsilon_i$ representa tudo o que o modelo não explica.
+# Dados e exploração
 
-Quando incluímos variáveis categóricas, o R cria variáveis indicadoras (*dummies*) comparando cada nível com uma categoria de referência.
-
-## Suposições: o que realmente precisamos verificar
-
-| Suposição | Significado operacional | Como verificar | O que fazer se falhar |
-|---|---|---|---|
-| Linearidade | a média condicional de $Y$ é linear nos parâmetros | resíduos vs. ajustados; resíduos parciais | transformação, polinômio, spline ou interação justificada |
-| Independência | erros de unidades distintas não são correlacionados | desenho da coleta; ordem/tempo/grupos | modelos mistos, séries temporais, erros agrupados |
-| Variância aproximadamente constante | dispersão dos erros é semelhante ao longo da média | resíduos vs. ajustados; escala-localização | transformação, erros robustos, WLS |
-| Normalidade aproximada dos erros | necessária principalmente para inferência exata em amostras pequenas | QQ-plot; forma dos resíduos | bootstrap, erros robustos, investigar modelo/outliers |
-| Ausência de colinearidade prejudicial | preditores não carregam quase a mesma informação | VIF/GVIF; estabilidade dos coeficientes | reformular, combinar, centrar, regularizar, coletar mais dados |
-| Ausência de influência excessiva | nenhuma observação domina o ajuste | alavancagem e distância de Cook | verificar dado, relatar sensibilidade; nunca excluir automaticamente |
-| Especificação adequada | termos importantes não foram omitidos | teoria, resíduos, interações, validação | reespecificar com justificativa substantiva |
-
-::: {.checkpoint}
-**Cheque conceitual.** Normalidade dos preditores não é pressuposto da regressão linear. O foco é a distribuição dos erros condicionais, e nem toda pequena violação invalida o modelo.
-:::
-
-# Conhecendo a base Credit
-
-## Estrutura, unidade e qualidade
+## Estrutura e qualidade da base
 
 ```{r dados-iniciais}
 dados <- read.csv("dataset.csv", stringsAsFactors = FALSE) |>
@@ -267,7 +201,7 @@ dados <- read.csv("dataset.csv", stringsAsFactors = FALSE) |>
 glimpse(dados)
 ```
 
-Cada linha representa um cliente; o saldo devedor está em dólares. Há `r nrow(dados)` observações.
+Cada linha representa um cliente; o saldo devedor está em dólares. A base contém `r nrow(dados)` observações.
 
 ```{r split-treino-teste}
 set.seed(42)
@@ -276,7 +210,7 @@ treino <- dados[ idx_treino, ]
 teste  <- dados[-idx_treino, ]
 ```
 
-Os dados foram divididos em **`r nrow(treino)` observações de treinamento** (70%) e **`r nrow(teste)` de teste** (30%). Toda a exploração, ajuste e seleção de modelos usará apenas o conjunto de treinamento. O conjunto de teste fica reservado para avaliação final da capacidade preditiva do modelo escolhido.
+Dividimos os dados em **`r nrow(treino)` observações de treinamento** (70%) e **`r nrow(teste)` de teste** (30%). Toda a exploração, ajuste e seleção de modelos utilizou apenas o conjunto de treinamento. O conjunto de teste ficou reservado para avaliação final da capacidade preditiva.
 
 ```{r dicionario}
 dicionario <- tibble::tribble(
@@ -337,9 +271,9 @@ knitr::kable(descritivas, digits = 2) |>
                   latex_options = c("hold_position"))
 ```
 
-## O saldo devedor segundo as variáveis categóricas
+## Saldo devedor segundo as variáveis categóricas
 
-Antes de ajustar qualquer modelo, examinamos graficamente se cada variável categórica separa o saldo devedor. Essa inspeção orienta quais variáveis merecem entrar no modelo e antecipa quais provavelmente não terão efeito significativo.
+Antes de ajustar qualquer modelo, examinamos graficamente se cada variável categórica separa o saldo devedor. Essa inspeção orientou quais variáveis mereciam entrar no modelo e antecipou quais provavelmente não teriam efeito significativo.
 
 ```{r boxplot-student, fig.height=4.8, fig.cap="Saldo devedor por condição de estudante."}
 ggplot(dados, aes(Student, Balance, color = Student)) +
@@ -356,7 +290,7 @@ ggplot(dados, aes(Student, Balance, color = Student)) +
   guides(fill = "none")
 ```
 
-Há uma separação clara. Os estudantes carregam saldos devedores bem mais elevados do que os não estudantes. Essa variável parece ter potencial para contribuir significativamente no modelo.
+Observamos uma separação clara: estudantes carregam saldos devedores bem mais elevados do que não estudantes.
 
 ```{r boxplot-gender, fig.height=4.8, fig.cap="Saldo devedor por gênero."}
 ggplot(dados, aes(Gender, Balance, color = Gender)) +
@@ -373,7 +307,7 @@ ggplot(dados, aes(Gender, Balance, color = Gender)) +
   guides(fill = "none")
 ```
 
-Não há separação visível entre os gêneros. As medianas, os quartis e a dispersão são praticamente idênticos. Provavelmente essa variável não contribuirá de forma significativa.
+Não identificamos separação visível entre os gêneros. As medianas, os quartis e a dispersão são praticamente idênticos.
 
 ```{r boxplot-married, fig.height=4.8, fig.cap="Saldo devedor por estado civil."}
 ggplot(dados, aes(Married, Balance, color = Married)) +
@@ -390,7 +324,7 @@ ggplot(dados, aes(Married, Balance, color = Married)) +
   guides(fill = "none")
 ```
 
-As distribuições de casados e não casados se sobrepõem amplamente. Não há sinal de que o estado civil, por si só, esteja associado ao saldo devedor.
+As distribuições de casados e não casados se sobrepõem amplamente. O estado civil, por si só, não parece estar associado ao saldo devedor.
 
 ```{r boxplot-ethnicity, fig.height=4.8, fig.cap="Saldo devedor por etnia."}
 ggplot(dados, aes(Ethnicity, Balance, color = Ethnicity)) +
@@ -407,13 +341,33 @@ ggplot(dados, aes(Ethnicity, Balance, color = Ethnicity)) +
   guides(fill = "none")
 ```
 
-As três etnias apresentam medianas, dispersões e formatos de distribuição muito semelhantes. A exploração gráfica não sugere uma associação relevante entre etnia e saldo devedor.
+As três etnias apresentam medianas, dispersões e formatos de distribuição muito semelhantes. Não encontramos evidência gráfica de associação entre etnia e saldo devedor.
 
-::: {.checkpoint}
-**Resumo da inspeção categórica:** Dos quatro preditores categóricos, apenas `Student` apresenta separação clara do saldo devedor. `Gender`, `Married` e `Ethnicity` não mostram diferenças visuais importantes. Essa observação será confirmada (ou não) pelos p-valores no modelo completo.
-:::
+Dos quatro preditores categóricos, apenas `Student` apresentou separação clara. `Gender`, `Married` e `Ethnicity` não mostraram diferenças visuais relevantes. Essa observação será confrontada com os p-valores nos modelos ajustados.
 
-## Relações bivariadas não contam a história completa
+## Distribuição do saldo devedor
+
+```{r distribuicao-balance, fig.height=5, fig.cap="Saldo devedor de cada cliente, ordenado por valor."}
+dados_ordenados <- dados |>
+  arrange(Balance) |>
+  mutate(ordem = row_number())
+
+ggplot(dados_ordenados, aes(x = ordem, y = Balance, color = Student)) +
+  geom_point(alpha = 0.7, size = 1.8) +
+  scale_color_manual(values = paleta_student) +
+  labs(
+    title = "Saldo devedor por cliente",
+    subtitle = "Cada ponto é um cliente, ordenado pelo saldo",
+    x = "Cliente (ordenado)", y = "Saldo devedor (US$)",
+    color = "Estudante"
+  )
+```
+
+Uma parcela considerável dos clientes apresenta saldo devedor próximo de zero, formando um platô na parte inferior do gráfico. A partir daí, o saldo cresce de forma aproximadamente linear até os valores mais altos, que ultrapassam US$ 1.500. Os estudantes (em dourado) concentram-se predominantemente na metade superior da distribuição, reforçando a separação já observada nos boxplots.
+
+Essa concentração de valores próximos a zero é um indicativo que um modelo linear simples talvez não consiga descrever perfeitamente os dados.
+
+## Relações bivariadas
 
 ```{r matriz-pares, fig.height=8.2, fig.cap="Matriz de pares: distribuições na diagonal, correlações no triângulo superior e dispersões no triângulo inferior."}
 GGally::ggpairs(
@@ -438,89 +392,15 @@ Dois padrões se destacam na matriz de correlação:
 1. `Limit` e `Rating` têm correlação muito alta (`r fmt_num(matriz_cor["Limit", "Rating"])`), sinalizando possível multicolinearidade severa se ambas entrarem no modelo.
 2. `Balance` tem correlação forte com `Limit` (`r fmt_num(matriz_cor["Balance", "Limit"])`) e `Rating` (`r fmt_num(matriz_cor["Balance", "Rating"])`), moderada com `Income` (`r fmt_num(matriz_cor["Balance", "Income"])`), e fraca com `Cards`, `Age` e `Education`.
 
-::: {.warning}
-Dois preditores positivamente correlacionados não precisam ter coeficientes múltiplos com o mesmo sinal. Cada coeficiente é um efeito parcial, condicionado aos demais termos. Uma inversão de sinal pode revelar colinearidade, confundimento ou uma pergunta condicional diferente, não uma contradição lógica automática.
-:::
+Vale lembrar que dois preditores positivamente correlacionados não precisam ter coeficientes com o mesmo sinal no modelo múltiplo. Cada coeficiente é um efeito parcial, condicionado aos demais termos, e uma inversão de sinal pode revelar colinearidade ou confundimento, não uma contradição lógica.
 
-```{r relacao-agregada-grupos, fig.height=5.8, fig.cap="A linha agregada mistura diferenças entre estudantes e não estudantes e relações dentro de cada grupo."}
-p_agregado <- ggplot(dados, aes(Limit, Balance)) +
-  geom_point(color = azul, alpha = 0.65) +
-  geom_smooth(method = "lm", se = TRUE, color = azul_escuro, fill = "#DCE8F7") +
-  labs(
-    title = "Relação agregada",
-    subtitle = "Uma única reta para todos os clientes",
-    x = "Limite de crédito (US$)", y = "Saldo devedor (US$)"
-  )
+# Construção progressiva dos modelos
 
-p_grupos <- ggplot(dados, aes(Limit, Balance, color = Student)) +
-  geom_point(alpha = 0.72) +
-  geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
-  scale_color_manual(values = paleta_student) +
-  labs(
-    title = "Relações por condição de estudante",
-    subtitle = "A inclinação pode variar entre grupos",
-    x = "Limite de crédito (US$)", y = "Saldo devedor (US$)",
-    color = "Estudante"
-  )
+Partimos de um modelo completo contendo todas as variáveis disponíveis e, a cada passo, removemos as que não contribuíam de forma significativa, verificando com p-valores, gráficos exploratórios e testes F. Todos os cinco modelos foram ajustados com as `r nrow(treino)` observações do conjunto de treinamento.
 
-p_agregado + p_grupos
-```
+## Modelo 1: modelo completo (todas as variáveis)
 
-# Construção progressiva dos cinco modelos
-
-A estratégia adotada é começar com um **modelo completo** contendo todas as variáveis disponíveis e, a cada passo, remover as que não contribuem de forma significativa, verificando com os p-valores, os gráficos exploratórios e, quando necessário, testes F. Ao final, chegaremos a um modelo enxuto e defensável.
-
-Os cinco modelos serão ajustados com as `r nrow(treino)` observações do conjunto de treinamento. A decisão final será tomada somente depois que todos tiverem sido estimados, interpretados e comparados.
-
-## Como ler a saída de `lm()`
-
-- **Estimate:** estimativa de cada coeficiente $\beta_j$;
-- **Std. Error:** erro-padrão, que mede a incerteza da estimativa;
-- **t value e p-valor:** teste de $H_0: \beta_j=0$, condicionado aos demais termos do modelo;
-- **Residual standard error:** escala típica dos resíduos, em dólares;
-- **Multiple $R^2$:** proporção da variabilidade observada explicada pelo ajuste;
-- **Adjusted $R^2$:** versão do $R^2$ que considera o número de parâmetros;
-- **F-statistic:** teste global do modelo contra um ajuste somente com intercepto.
-
-O coeficiente estimado e seu erro-padrão cumprem papéis diferentes. A estimativa indica o tamanho e o sentido da associação; o erro-padrão indica a precisão dessa estimativa. Em termos simples, ele resume quanto a estimativa tenderia a variar se repetíssemos a coleta e o ajuste muitas vezes sob condições semelhantes. O valor de $t$ é calculado por $t=\widehat\beta/EP(\widehat\beta)$: para um mesmo coeficiente, maior erro-padrão implica menor precisão e menor evidência contra $H_0:\beta=0$.
-
-## Variáveis categóricas como contrastes
-
-Como o modelo completo já inclui variáveis categóricas, é preciso entender como o R as representa. Para cada fator, o R escolhe uma **categoria de referência** e cria variáveis indicadoras (*dummies*) para as demais.
-
-`Student` possui duas categorias; o R usa `No` como referência:
-
-| Condição | $Z_1$: StudentYes |
-|---|---:|
-| Não estudante | 0 |
-| Estudante | 1 |
-
-`Ethnicity` possui três categorias; o R usa `African American` como referência:
-
-| Etnia | $Z_2$: Asian | $Z_3$: Caucasian |
-|---|---:|---:|
-| African American | 0 | 0 |
-| Asian | 1 | 0 |
-| Caucasian | 0 | 1 |
-
-`Gender` e `Married` seguem a mesma lógica, cada uma com uma indicadora.
-
-```{r dummies}
-levels(dados$Student)
-contrasts(dados$Student)
-
-levels(dados$Ethnicity)
-contrasts(dados$Ethnicity)
-
-levels(dados$Gender)
-contrasts(dados$Gender)
-```
-
-Assim, cada variável categórica contribui com $k-1$ coeficientes, em que $k$ é o número de categorias, sem criar dependência linear perfeita com o intercepto.
-
-## Modelo 1 — modelo completo (todas as variáveis)
-
-O primeiro ajuste inclui **todos** os preditores disponíveis. A ideia é partir do modelo mais abrangente e, a partir da sua saída, identificar quais variáveis não contribuem:
+O primeiro ajuste inclui todos os preditores disponíveis. A partir da sua saída, identificamos quais variáveis não contribuem.
 
 ```{r modelo1}
 modelo1 <- lm(
@@ -529,7 +409,7 @@ modelo1 <- lm(
   data = treino
 )
 
-summary(modelo1)
+tabela_resumo_modelo(modelo1)
 
 tabela_coeficientes(modelo1) |>
   knitr::kable(digits = 3) |>
@@ -537,17 +417,7 @@ tabela_coeficientes(modelo1) |>
                   latex_options = c("hold_position"))
 ```
 
-### O que é VIF?
-
-**VIF** significa *Variance Inflation Factor*, ou **fator de inflação da variância**. Para o preditor $X_j$,
-
-$$
-VIF_j=\frac{1}{1-R_j^2},
-$$
-
-em que $R_j^2$ vem de uma regressão auxiliar de $X_j$ contra todos os outros preditores. Se os demais preditores quase conseguem reconstruir $X_j$, esse $R_j^2$ fica próximo de 1 e o VIF cresce.
-
-O VIF informa por quanto a **variância** estimada de $\widehat\beta_j$ foi inflada pela relação linear entre os preditores. A raiz quadrada do VIF informa aproximadamente por quanto o **erro-padrão** foi inflado em comparação com uma situação ideal de preditores não correlacionados. A tolerância é $1/VIF$; valores pequenos significam que resta pouca informação exclusiva naquele preditor.
+Para avaliar a multicolinearidade, calculamos o VIF (*Variance Inflation Factor*) de cada preditor. O VIF indica por quanto a variância estimada de $\widehat\beta_j$ está inflada pela relação linear entre os preditores: valores acima de 5 merecem atenção e acima de 10 indicam colinearidade forte.
 
 ```{r vif-modelo1}
 vif_modelo1 <- performance::check_collinearity(modelo1) |>
@@ -567,25 +437,17 @@ vif_modelo1 |>
                   latex_options = c("hold_position"))
 ```
 
-### Comentários e observações sobre o Modelo 1
+### Observações sobre o Modelo 1
 
-O modelo é globalmente significativo e apresenta $R^2$ ajustado igual a `r fmt_num(summary(modelo1)$adj.r.squared)`, ou aproximadamente `r fmt_num(100 * summary(modelo1)$adj.r.squared, 1)`% da variabilidade explicada.
+O modelo é globalmente significativo e apresenta $R^2$ ajustado igual a `r fmt_num(summary(modelo1)$adj.r.squared)`, ou aproximadamente `r fmt_num(100 * summary(modelo1)$adj.r.squared, 1)`% da variabilidade explicada. Identificamos dois problemas:
 
-Dois problemas ficam evidentes:
+1. **Multicolinearidade severa entre `Limit` e `Rating`.** Os VIF dessas variáveis são extremamente altos: a correlação de `r fmt_num(cor(dados$Limit, dados$Rating))` faz com que cada uma possa ser quase perfeitamente reconstruída pela outra. Isso infla os erros-padrão e torna os coeficientes individuais instáveis. Como `Limit` tem interpretação mais direta (é o próprio limite do cartão em dólares), optamos por remover `Rating` no próximo passo.
 
-1. **Multicolinearidade severa entre `Limit` e `Rating`.** Os VIF dessas variáveis são extremamente altos: a correlação de `r fmt_num(cor(dados$Limit, dados$Rating))` faz com que cada uma possa ser quase perfeitamente reconstruída pela outra. Isso infla os erros-padrão e torna os coeficientes individuais instáveis. A solução é manter apenas uma delas. Como `Limit` tem interpretação mais direta (é o próprio limite do cartão em dólares), **removeremos `Rating`** no próximo passo.
+2. **Muitas variáveis com p-valor alto.** Diversas variáveis apresentam p-valores bem acima de 0,05, indicando que, condicionadas aos demais termos, não contribuem para explicar o saldo devedor. Isso é coerente com a exploração gráfica.
 
-2. **Muitas variáveis com p-valor alto.** Várias variáveis apresentam p-valores bem acima de 0,05, indicando que, condicionadas aos demais termos, não trazem evidência de contribuição para explicar o saldo devedor. Isso é coerente com a exploração gráfica, que já havia mostrado pouca separação para `Gender`, `Married` e `Ethnicity`.
+## Modelo 2: remoção de `Rating` (colinearidade)
 
-Regras como "VIF maior que 5 exige atenção" e "VIF maior que 10 indica colinearidade forte" são referências práticas, não leis universais. Aqui, os valores extremos de `Limit` e `Rating` e a correlação quase perfeita entre ambas contam uma história clara: os efeitos individuais dessas duas variáveis são impossíveis de separar com estabilidade.
-
-::: {.warning}
-**Leitura correta da multicolinearidade:** O modelo ainda pode ajustar bem os dados. O principal prejuízo está na separação e interpretação dos efeitos individuais, nos erros-padrão e na estabilidade dos coeficientes.
-:::
-
-## Modelo 2 — remoção de `Rating` (colinearidade)
-
-A multicolinearidade entre `Limit` e `Rating` é o problema mais urgente. Removemos `Rating` (a variável com interpretação menos direta) e mantivemos todo o restante:
+Removemos `Rating` e mantivemos todo o restante:
 
 ```{r modelo2}
 modelo2 <- lm(
@@ -594,7 +456,7 @@ modelo2 <- lm(
   data = treino
 )
 
-summary(modelo2)
+tabela_resumo_modelo(modelo2)
 
 tabela_coeficientes(modelo2) |>
   knitr::kable(digits = 3) |>
@@ -618,21 +480,13 @@ vif_modelo2 |>
                   latex_options = c("hold_position"))
 ```
 
-### Comentários e observações sobre o Modelo 2
+### Observações sobre o Modelo 2
 
-Com a remoção de `Rating`, o problema de colinearidade foi resolvido: nenhum VIF está em faixa preocupante. O $R^2$ ajustado permanece em `r fmt_num(summary(modelo2)$adj.r.squared)`, mostrando que `Rating` não acrescentava informação que `Limit` já não fornecesse.
+Com a remoção de `Rating`, nenhum VIF está em faixa preocupante. O $R^2$ ajustado permaneceu em `r fmt_num(summary(modelo2)$adj.r.squared)`, mostrando que `Rating` não acrescentava informação que `Limit` já não fornecesse. Com os erros-padrão estabilizados, os p-valores confirmam que `Student`, `Income` e `Limit` são significativos, enquanto `Gender`, `Married`, `Ethnicity`, `Education`, `Cards` e `Age` não apresentam evidência de contribuição.
 
-Agora podemos examinar os p-valores com mais confiança, pois os erros-padrão não estão mais inflados pela colinearidade:
+## Modelo 3: remoção de `Gender`, `Married` e `Ethnicity`
 
-- **`Student`** é altamente significativo (coerente com a separação clara nos boxplots).
-- **`Income`** e **`Limit`** são significativos.
-- **`Gender`**, **`Married`**, **`Ethnicity`**, **`Education`**, **`Cards`** e **`Age`** apresentam p-valores altos, sem evidência de contribuição significativa.
-
-Os boxplots da exploração já haviam indicado que `Gender`, `Married` e `Ethnicity` não separam o saldo devedor. Os p-valores no modelo confirmam essa observação. No próximo passo, removemos essas três variáveis categóricas de uma vez.
-
-## Modelo 3 — remoção de `Gender`, `Married` e `Ethnicity`
-
-A exploração gráfica mostrou que essas três variáveis categóricas não separam o saldo devedor, e os p-valores no Modelo 2 confirmam que elas não contribuem significativamente na presença dos demais preditores. Removemos as três:
+A exploração gráfica mostrou que essas três variáveis categóricas não separam o saldo devedor, e os p-valores no Modelo 2 confirmaram a ausência de contribuição significativa:
 
 ```{r modelo3}
 modelo3 <- lm(
@@ -640,7 +494,7 @@ modelo3 <- lm(
   data = treino
 )
 
-summary(modelo3)
+tabela_resumo_modelo(modelo3)
 
 tabela_coeficientes(modelo3) |>
   knitr::kable(digits = 3) |>
@@ -648,15 +502,13 @@ tabela_coeficientes(modelo3) |>
                   latex_options = c("hold_position"))
 ```
 
-### Comentários e observações sobre o Modelo 3
+### Observações sobre o Modelo 3
 
-O $R^2$ ajustado é `r fmt_num(summary(modelo3)$adj.r.squared)` (praticamente inalterado em relação ao Modelo 2, que era `r fmt_num(summary(modelo2)$adj.r.squared)`). Remover três variáveis e cinco parâmetros não custou ajuste, confirmando que `Gender`, `Married` e `Ethnicity` eram irrelevantes para explicar o saldo.
+O $R^2$ ajustado é `r fmt_num(summary(modelo3)$adj.r.squared)`, praticamente inalterado em relação ao Modelo 2 (`r fmt_num(summary(modelo2)$adj.r.squared)`). Remover três variáveis e cinco parâmetros não custou ajuste. `Education` e `Age` permanecem com p-valores altos. `Cards` possui correlação fraca com `Balance` na exploração inicial e a instabilidade do seu p-valor entre especificações sugerem que sua contribuição é marginal. Testamos a remoção das três no próximo passo e verificamos com o teste F se houve perda de ajuste.
 
-Ainda restam variáveis com p-valores altos: **`Education`**, **`Cards`** e **`Age`** não apresentam evidência de contribuição significativa. Removemos as três no próximo passo.
+## Modelo 4: `Income + Limit + Student` (modelo final)
 
-## Modelo 4 — remoção de `Education`, `Cards` e `Age` (modelo final)
-
-As variáveis `Education`, `Cards` e `Age` apresentaram p-valores altos no Modelo 3 e correlações fracas com `Balance` na exploração inicial. Nenhuma delas contribui significativamente na presença de `Income`, `Limit` e `Student`. Removemos as três de uma vez:
+As variáveis `Education` e `Age` apresentaram p-valores altos no Modelo 3, e `Cards`, baixíssima correlação com a variável resposta. Removemos as três e verificamos a perda de ajuste com o teste F:
 
 ```{r modelo4}
 modelo4 <- lm(
@@ -664,7 +516,7 @@ modelo4 <- lm(
   data = treino
 )
 
-summary(modelo4)
+tabela_resumo_modelo(modelo4)
 
 tabela_coeficientes(modelo4) |>
   knitr::kable(digits = 3) |>
@@ -682,15 +534,15 @@ $$
 `r fmt_parcela(coef(modelo4)["StudentYes"])`\,Z_1.
 $$
 
-### Comentários e interpretação do Modelo 4
+### Interpretação do Modelo 4
 
-O $R^2$ ajustado é `r fmt_num(summary(modelo4)$adj.r.squared)`, praticamente idêntico ao do modelo completo com dez variáveis. Todas as variáveis são significativas:
+O $R^2$ ajustado é `r fmt_num(summary(modelo4)$adj.r.squared)`, praticamente idêntico ao do modelo completo com dez variáveis. Todos os coeficientes são significativos:
 
 - Mantendo `Limit` e `Student` constantes, cada US$ 1.000 adicionais de renda estão associados a `r fmt_num(coef(modelo4)["Income"] * 1000)` dólares a **menos** no saldo. Entre clientes com o mesmo limite, quem tem renda maior carrega menos dívida.
 - Mantendo `Income` e `Student` constantes, cada US$ 1 adicional no limite está associado a `r fmt_num(coef(modelo4)["Limit"])` dólares a mais no saldo.
 - Controlando as variáveis financeiras, estudantes carregam em média `r fmt_num(coef(modelo4)["StudentYes"])` dólares a mais que não estudantes.
 
-A interpretação de `Income` é contraintuitiva à primeira vista: a renda mais alta associada a menor dívida, porém, faz sentido condicional: *dado o mesmo limite de crédito*, pessoas de maior renda tendem a usar uma fração menor do limite disponível.
+A associação negativa de `Income` faz sentido condicional: *dado o mesmo limite de crédito*, pessoas de maior renda tendem a usar uma fração menor do limite disponível.
 
 ```{r vif-modelo4}
 vif_modelo4 <- performance::check_collinearity(modelo4) |>
@@ -708,11 +560,11 @@ vif_modelo4 |>
                   latex_options = c("hold_position"))
 ```
 
-Os VIF do modelo são todos baixos, confirmando ausência de multicolinearidade.
+Os VIF do Modelo 4 são todos baixos, confirmando ausência de multicolinearidade.
 
-## Modelo 5 — alternativa com `Rating` no lugar de `Limit`
+## Modelo 5: alternativa com `Rating` no lugar de `Limit`
 
-No Modelo 1, removemos `Rating` por causa da colinearidade com `Limit`. Mas e se tivéssemos feito a escolha oposta? O Modelo 5 responde a essa pergunta, substituindo `Limit` por `Rating`:
+Para verificar a consequência da escolha entre as duas variáveis colineares, ajustamos um modelo alternativo substituindo `Limit` por `Rating`:
 
 ```{r modelo5}
 modelo5 <- lm(
@@ -720,7 +572,7 @@ modelo5 <- lm(
   data = treino
 )
 
-summary(modelo5)
+tabela_resumo_modelo(modelo5)
 
 tabela_coeficientes(modelo5) |>
   knitr::kable(digits = 3) |>
@@ -728,13 +580,13 @@ tabela_coeficientes(modelo5) |>
                   latex_options = c("hold_position"))
 ```
 
-### Comentários e interpretação do Modelo 5
+O $R^2$ ajustado é `r fmt_num(summary(modelo5)$adj.r.squared)`, comparável ao do Modelo 4 (`r fmt_num(summary(modelo4)$adj.r.squared)`). As duas variáveis colineares carregam informação semelhante, então trocar uma pela outra produz ajuste parecido. A diferença está na interpretação: `Limit` é uma quantidade em dólares diretamente compreensível, enquanto `Rating` é uma pontuação adimensional. Para comunicação, preferimos o Modelo 4.
 
-O $R^2$ ajustado é `r fmt_num(summary(modelo5)$adj.r.squared)`, comparável ao do Modelo 4 (`r fmt_num(summary(modelo4)$adj.r.squared)`). As duas variáveis colineares carregam informação semelhante, então trocar uma pela outra produz ajuste parecido. A diferença está na interpretação: `Limit` é uma quantidade em dólares diretamente compreensível, enquanto `Rating` é uma pontuação adimensional. Para comunicação e interpretação, o Modelo 4 com `Limit` é preferível.
+## Efeito da categoria de referência
 
-## Alterando a categoria de referência
+Para a variável categórica Student, foi modelado um booleano indicando se a amostra é estudante, a seguir, mostramos como a escolha do valor de referência não tem impacto significativo.
 
-Mudar a referência altera a forma dos coeficientes, mas não altera resíduos, valores ajustados, $R^2$, AIC ou BIC.
+Para ilustrar que a escolha da categoria de referência afeta a forma dos coeficientes mas não o modelo em si, reajustamos o Modelo 4 usando `Yes` como referência de `Student`:
 
 ```{r mudanca-referencia}
 dados_ref_yes <- treino |>
@@ -751,25 +603,21 @@ tabela_coeficientes(modelo4_ref_yes) |>
                   latex_options = c("hold_position"))
 ```
 
-Com `Yes` como referência, o coeficiente de `StudentNo` expressa o quanto não estudantes têm de saldo **menor**, em média condicional, do que estudantes. O sinal se inverte, mas o modelo é idêntico. O exemplo mostra que mudar a referência muda as comparações expressas pelos coeficientes, mas não muda o ajuste do modelo.
-
-```{r lista-modelos, include=FALSE}
-modelos <- list(
-  "Modelo 1 — completo (10 preditores)"       = modelo1,
-  "Modelo 2 — sem Rating"                      = modelo2,
-  "Modelo 3 — sem Gender, Married, Ethnicity"  = modelo3,
-  "Modelo 4 — Income + Limit + Student"        = modelo4,
-  "Modelo 5 — Income + Rating + Student"       = modelo5
-)
-```
+Com `Yes` como referência, o coeficiente de `StudentNo` expressa o quanto não estudantes têm de saldo menor, em média condicional, do que estudantes. O sinal se inverte, mas resíduos, valores ajustados, $R^2$, AIC e BIC permanecem idênticos.
 
 ## Seleção do modelo
 
-A tabela abaixo reúne os cinco ajustes. Valores maiores de $R^2$ ajustado e menores de RQME residual, AIC e BIC são preferíveis.
+```{r lista-modelos, include=FALSE}
+modelos <- list(
+  "Modelo 1" = modelo1,
+  "Modelo 2" = modelo2,
+  "Modelo 3" = modelo3,
+  "Modelo 4" = modelo4,
+  "Modelo 5" = modelo5
+)
+```
 
-- **$R^2$ ajustado:** parcela da variação explicada, com penalização pelo número de parâmetros;
-- **RQME residual:** tamanho típico do erro de ajuste, em dólares;
-- **AIC e BIC:** critérios que equilibram ajuste e complexidade; valores menores são preferíveis, e o BIC penaliza mais modelos complexos.
+A tabela abaixo reúne os cinco ajustes. Valores maiores de $R^2$ ajustado e menores de RQME residual, AIC e BIC são preferíveis.
 
 ```{r comparacao-inicial-modelos}
 comparacao_ajuste <- imap_dfr(modelos, function(ajuste, nome) {
@@ -790,42 +638,42 @@ knitr::kable(comparacao_ajuste, digits = 3) |>
                   latex_options = c("hold_position"))
 ```
 
-O $R^2$ ajustado permanece estável ao longo de toda a simplificação, mostrando que as variáveis removidas realmente não contribuíam. O BIC, que penaliza mais parâmetros extras, favorece os modelos mais simples. O Modelo 4 apresenta o melhor equilíbrio entre ajuste e parcimônia. O Modelo 5, com `Rating` no lugar de `Limit`, tem ajuste comparável, confirmando que as duas variáveis carregam essencialmente a mesma informação.
+O $R^2$ ajustado permaneceu estável ao longo de toda a simplificação, mostrando que as variáveis removidas não contribuíam. O BIC, que penaliza mais parâmetros extras, favorece os modelos mais simples. Os testes F abaixo verificam formalmente se cada grupo de variáveis removidas acrescentava informação.
 
-Os testes F abaixo verificam formalmente se cada grupo de variáveis removidas acrescentava informação.
+```{r testes-f}
+extrair_teste_f <- function(mod_reduzido, mod_completo, descricao) {
+  a <- anova(mod_reduzido, mod_completo)
+  tibble(
+    comparacao = descricao,
+    gl_removidos = a$Df[2],
+    estatistica_F = a$F[2],
+    `p-valor` = fmt_p(a$`Pr(>F)`[2])
+  )
+}
 
-### Comparação 1 — Modelo 2 versus Modelo 1: contribuição de `Rating`
-
-```{r teste-modelo2-modelo1}
-anova(modelo2, modelo1)
-```
-
-### Comparação 2 — Modelo 3 versus Modelo 2: contribuição de `Gender`, `Married` e `Ethnicity`
-
-```{r teste-modelo3-modelo2}
 teste_m3_m2 <- anova(modelo3, modelo2)
-teste_m3_m2
+
+tabela_testes_f <- bind_rows(
+  extrair_teste_f(modelo2, modelo1, "Modelo 2 vs 1 (Rating)"),
+  extrair_teste_f(modelo3, modelo2, "Modelo 3 vs 2 (Gender, Married, Ethnicity)"),
+  extrair_teste_f(modelo4, modelo3, "Modelo 4 vs 3 (Education, Cards, Age)")
+)
+
+knitr::kable(tabela_testes_f, digits = 3,
+             col.names = c("Comparação", "GL removidos", "F", "p-valor")) |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
+                latex_options = c("hold_position"))
 ```
 
-### Comparação 3 — Modelo 4 versus Modelo 3: contribuição de `Education`, `Cards` e `Age`
-
-```{r teste-modelo4-modelo3}
-anova(modelo4, modelo3)
-```
-
-### Comparação 4 — Modelo 4 versus Modelo 5: `Limit` ou `Rating`?
-
-Os Modelos 4 e 5 não são aninhados (usam preditores diferentes), portanto o teste F não se aplica. A comparação se dá pelos critérios de ajuste da tabela: $R^2$ ajustado, AIC e BIC. Ambos produzem ajustes semelhantes, mas `Limit` tem interpretação mais direta.
-
-Em cada comparação aninhada, um p-valor alto indica que as variáveis removidas não acrescentavam ajuste significativo, confirmando a decisão de simplificar. O teste F responde a uma pergunta pontual: "este termo melhora este modelo reduzido?". E ele só pode ser usado para modelos aninhados. AIC, BIC e $R^2$ ajustado comparam o equilíbrio geral entre ajuste e complexidade.
+Em cada comparação, um p-valor alto indica que as variáveis removidas não acrescentavam ajuste significativo, confirmando a simplificação. Os Modelos 4 e 5 não são aninhados (usam preditores diferentes), portanto o teste F não se aplica; a comparação entre eles se deu pelos critérios de ajuste da tabela anterior.
 
 ::: {.decision}
-**Modelo final: Modelo 4 --- `Balance ~ Income + Limit + Student`.** Partimos de um modelo completo com dez preditores e, a cada passo, verificamos que as variáveis removidas não contribuíam significativamente. O Modelo 4 mantém $R^2$ ajustado de `r fmt_num(summary(modelo4)$adj.r.squared)`, o menor BIC (`r fmt_num(BIC(modelo4), 2)`) e apenas três preditores, todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirma que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade. A simplificação progressiva é confirmada tanto pelos testes F quanto pela estabilidade do $R^2$ ajustado.
+**Modelo final: Modelo 4 — `Balance ~ Income + Limit + Student`.** Partimos de um modelo completo com dez preditores e, a cada passo, verificamos que as variáveis removidas não contribuíam significativamente. O Modelo 4 apresenta $R^2$ ajustado de `r fmt_num(summary(modelo4)$adj.r.squared)`, o menor BIC (`r fmt_num(BIC(modelo4), 2)`) e apenas três preditores, todos significativos, interpretáveis e sem colinearidade.
 :::
 
-# Diagnóstico completo dos resíduos
+# Diagnóstico dos resíduos
 
-O Modelo 4, selecionado como modelo final, será usado para a análise detalhada dos pressupostos. O diagnóstico verificará se sua forma linear é compatível com os dados.
+Aplicamos o diagnóstico ao Modelo 4, selecionado como modelo final, para verificar se a forma linear é compatível com os dados.
 
 ```{r modelo-diagnostico}
 modelo_diagnostico <- modelo4
@@ -838,27 +686,34 @@ diag <- augment(modelo_diagnostico, data = treino) |>
   )
 ```
 
-## O que verificaremos antes dos gráficos
+## Linearidade
 
-O diagnóstico não procura um "gráfico perfeito"; ele verifica se há indícios fortes de que o modelo linear escolhido é inadequado. Antes de olhar a figura, estabeleça as perguntas de cada painel:
-
-- **Linearidade:** os resíduos oscilam sem curvatura em torno de zero?
-- **Homocedasticidade:** a dispersão dos resíduos se mantém semelhante ao longo dos valores ajustados?
-- **Normalidade aproximada:** a distribuição dos resíduos é compatível com uma normal, especialmente nas caudas?
-- **Alavancagem e influência:** existe algum cliente com combinação incomum de preditores e capacidade de alterar substancialmente o ajuste?
-
-Essas verificações se complementam. Um único ponto fora de um limite não invalida o modelo; o interesse está em padrões persistentes e em sua relevância para a pergunta da análise.
-
-## Quatro gráficos fundamentais
-
-```{r graficos-diagnostico, fig.height=8.4, fig.cap="Diagnóstico do Modelo 4. Linhas de referência servem como guias, não como decisões mecânicas."}
-p1 <- ggplot(diag, aes(.fitted, .resid)) +
+```{r diag-linearidade, fig.height=4.8, fig.cap="Resíduos versus valores ajustados."}
+ggplot(diag, aes(.fitted, .resid)) +
   geom_hline(yintercept = 0, color = cinza, linetype = 2) +
   geom_point(color = azul, alpha = 0.7) +
   geom_smooth(se = FALSE, method = "loess", color = rosa, linewidth = 0.85) +
-  labs(title = "Resíduos × ajustados", subtitle = "Procure curvatura e formato de funil",
+  labs(title = "Resíduos × ajustados",
        x = "Valor ajustado", y = "Resíduo")
+```
 
+A linha suavizada mostra uma curvatura: os resíduos tendem a ser positivos para valores ajustados baixos (abaixo de ~200), negativos na faixa intermediária e novamente positivos para valores altos. Esse padrão em U indica que a relação linear não captura completamente a estrutura dos dados, sugerindo que termos adicionais (polinomiais ou interações) poderiam melhorar o ajuste. Apesar disso, o desvio é moderado e o modelo ainda explica cerca de 95% da variabilidade.
+
+## Homocedasticidade
+
+```{r diag-homocedasticidade, fig.height=4.8, fig.cap="Gráfico escala-localização."}
+ggplot(diag, aes(.fitted, sqrt(abs(.std.resid)))) +
+  geom_point(color = azul, alpha = 0.7) +
+  geom_smooth(se = FALSE, method = "loess", color = rosa, linewidth = 0.85) +
+  labs(title = "Escala-localização",
+       x = "Valor ajustado", y = expression(sqrt("|resíduo padronizado|")))
+```
+
+A linha suavizada apresenta uma leve inclinação ascendente: a dispersão dos resíduos aumenta para valores ajustados mais altos. Isso sugere heterocedasticidade moderada, com clientes de saldo previsto alto apresentando erros mais variáveis do que aqueles com saldo previsto baixo. A violação não é severa, mas seria prudente considerar erros-padrão robustos se a inferência exata dos coeficientes fosse o objetivo principal.
+
+## Normalidade aproximada
+
+```{r diag-normalidade, fig.height=4.8, fig.cap="QQ-plot com envelope simulado de 95%."}
 set.seed(20260715)
 n_diag <- nrow(diag)
 quantis_teoricos <- qnorm(ppoints(n_diag))
@@ -870,86 +725,65 @@ envelope_qq <- tibble(
   limite_superior = apply(simulacoes_normais, 1, quantile, probs = 0.975)
 )
 
-p2 <- ggplot(envelope_qq, aes(quantil_teorico, residuo_observado)) +
+ggplot(envelope_qq, aes(quantil_teorico, residuo_observado)) +
   geom_ribbon(
     aes(ymin = limite_inferior, ymax = limite_superior),
     fill = dourado, alpha = 0.22
   ) +
   geom_abline(intercept = 0, slope = 1, color = rosa, linewidth = 0.85) +
   geom_point(color = azul, alpha = 0.72) +
-  labs(title = "QQ-plot com envelope de 95%", subtitle = "Pontos fora da faixa sugerem desvio de normalidade",
+  labs(title = "QQ-plot com envelope de 95%",
        x = "Quantis teóricos", y = "Resíduo padronizado")
+```
 
-p3 <- ggplot(diag, aes(.fitted, sqrt(abs(.std.resid)))) +
-  geom_point(color = azul, alpha = 0.7) +
-  geom_smooth(se = FALSE, method = "loess", color = rosa, linewidth = 0.85) +
-  labs(title = "Escala–localização", subtitle = "Uma faixa aproximadamente horizontal é desejável",
-       x = "Valor ajustado", y = expression(sqrt("|resíduo padronizado|")))
+O QQ-plot revela desvios nas duas caudas: na cauda inferior, os resíduos são menos negativos do que o esperado por uma normal, e na cauda superior, são mais positivos. Vários pontos excedem o envelope simulado de 95%, indicando caudas mais pesadas do que a distribuição normal prevê. Isso é coerente com a presença de clientes cujo saldo devedor real se afasta consideravelmente do previsto pelo modelo.
 
-p4 <- ggplot(diag, aes(.hat, .std.resid, size = .cooksd)) +
+```{r shapiro}
+teste_shapiro <- shapiro.test(residuals(modelo_diagnostico))
+
+tibble(
+  teste = "Shapiro-Wilk",
+  W = fmt_num(unname(teste_shapiro$statistic), 4),
+  `p-valor` = fmt_p(teste_shapiro$p.value)
+) |>
+  knitr::kable() |>
+  kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
+                latex_options = c("hold_position"))
+```
+
+O teste de Shapiro-Wilk rejeita a hipótese de normalidade (p-valor `r fmt_p(teste_shapiro$p.value)`), confirmando o que o QQ-plot já indicava. Com `r nrow(treino)` observações, o teste é sensível a desvios pequenos; ainda assim, o desvio aqui é visualmente perceptível. Na prática, com amostras desse tamanho, os estimadores de MQO continuam consistentes e os intervalos de confiança são razoavelmente robustos, mas a inferência exata baseada na distribuição t deve ser interpretada com cautela.
+
+## Alavancagem e influência
+
+```{r diag-influencia, fig.height=4.8, fig.cap="Alavancagem versus resíduo padronizado. Tamanho proporcional à distância de Cook."}
+ggplot(diag, aes(.hat, .std.resid, size = .cooksd)) +
   geom_hline(yintercept = c(-2, 2), color = cinza, linetype = 2) +
   geom_vline(xintercept = unique(diag$leverage_limite), color = dourado, linetype = 2) +
   geom_point(color = azul, alpha = 0.62) +
   scale_size_continuous(range = c(1.2, 6), guide = "none") +
-  labs(title = "Alavancagem e influência", subtitle = "Linha laranja: alavancagem alta; tamanho: distância de Cook",
+  labs(title = "Alavancagem e influência",
+       subtitle = "Linha laranja: 2p/n; tamanho: distância de Cook",
        x = "Alavancagem", y = "Resíduo padronizado")
-
-(p1 + p2) / (p3 + p4)
 ```
 
-### Linearidade
+Do total de observações, `r sum(diag$.hat > unique(diag$leverage_limite))` ultrapassam o limiar de alavancagem $2p/n=`r fmt_num(unique(diag$leverage_limite), 3)`$ e `r sum(diag$.cooksd > 4 / nrow(treino))` ultrapassam $4/n=`r fmt_num(4 / nrow(treino), 3)`$ para a distância de Cook. A maior distância de Cook observada é `r fmt_num(max(diag$.cooksd), 3)`, bem abaixo do limiar conservador de 1. Não identificamos nenhuma observação isolada com influência dominante sobre o ajuste. Os pontos de maior alavancagem tendem a ser clientes com combinações extremas de renda e limite, mas seus resíduos não são grandes o suficiente para alterar substancialmente os coeficientes.
 
-O primeiro gráfico coloca no eixo horizontal os valores previstos pelo modelo e, no eixo vertical, os resíduos $e_i=y_i-\widehat y_i$. Um resíduo positivo indica que o modelo subestimou o saldo devedor; um resíduo negativo indica que o modelo superestimou.
+## Independência
 
-O gráfico responde principalmente à pergunta: **a forma linear escolhida consegue representar a média da resposta?** O comportamento desejável é uma nuvem distribuída aleatoriamente ao redor de zero, com a linha suavizada aproximadamente horizontal. Uma forma em U ou U invertido sugeriria curvatura não representada; ondas poderiam indicar termos omitidos; grupos separados poderiam revelar que alguma estrutura categórica ainda não foi modelada.
-
-### Homocedasticidade
-
-O terceiro gráfico, escala–localização, retira o sinal dos resíduos padronizados e destaca seu tamanho. Ele responde à pergunta: **a dispersão dos erros permanece aproximadamente constante para valores previstos pequenos e grandes?** Uma faixa de largura semelhante e uma linha suavizada horizontal são desejáveis. Um funil que se abre indicaria variância crescente; um funil que se fecha indicaria variância decrescente.
-
-### Normalidade aproximada
-
-O QQ-plot compara os quantis dos resíduos padronizados com os quantis esperados de uma distribuição normal. A faixa dourada é um envelope simulado **heurístico** de 95%: ela mostra a variação esperada de uma amostra normal independente do mesmo tamanho. Resíduos padronizados de uma regressão não são observações independentes perfeitas; por isso, o envelope é apenas uma referência visual. Pontos sistematicamente fora da faixa, sobretudo nas caudas, sugerem desvio de normalidade; poucos pontos isolados podem ocorrer ao acaso.
-
-O QQ-plot avalia a distribuição dos **resíduos**, e não exige que `Balance` ou os preditores sejam normalmente distribuídos. Essa normalidade é especialmente relevante para a qualidade dos testes, p-valores e intervalos de confiança em amostras pequenas. O envelope não avalia alavancagem ou influência: uma observação pode estar dentro do envelope de normalidade e, ainda assim, ter alavancagem alta.
-
-```{r shapiro}
-teste_shapiro <- shapiro.test(residuals(modelo_diagnostico))
-tibble(
-  teste = "Shapiro–Wilk",
-  W = unname(teste_shapiro$statistic),
-  `p-valor` = teste_shapiro$p.value
-) |>
-  mutate(across(where(is.numeric), ~ round(.x, 4)))
-```
-
-O teste de Shapiro–Wilk apresentou p-valor `r fmt_num(teste_shapiro$p.value, 4)`. Este resultado deve ser interpretado em conjunto com o QQ-plot. Com amostras de `r nrow(treino)` observações, testes podem detectar desvios irrelevantes do ponto de vista prático. Por isso, o gráfico e o teste devem ser lidos em conjunto.
-
-### Alavancagem e influência
-
-O quarto gráfico combina três informações. A **alavancagem**, no eixo horizontal, mede quão incomum é a combinação de preditores de um cliente. A linha laranja é apenas um limite de triagem para alavancagem alta; ultrapassá-la significa que o cliente está em uma região pouco comum dos preditores, e **não** que ele seja uma observação errada ou que deva ser removido. O resíduo padronizado, no eixo vertical, mede quão distante sua resposta ficou do valor previsto. O tamanho do ponto representa a **distância de Cook**, que resume quanto o ajuste completo pode mudar quando aquela observação é retirada.
-
-Uma observação com alavancagem alta não é automaticamente problemática: ela pode seguir perfeitamente a tendência. Uma observação com resíduo grande também pode ter pouca influência se estiver em uma região muito povoada dos preditores. A maior preocupação ocorre quando alavancagem alta e resíduo grande aparecem juntos, produzindo distância de Cook elevada.
-
-Usando apenas referências de triagem, `r sum(diag$.hat > unique(diag$leverage_limite))` observações ultrapassam $2p/n=`r fmt_num(unique(diag$leverage_limite), 3)`$ e `r sum(diag$.cooksd > 4 / nrow(treino))` ultrapassam $4/n=`r fmt_num(4 / nrow(treino), 3)`$ para a distância de Cook. A maior distância de Cook é `r fmt_num(max(diag$.cooksd), 3)`.
-
-### Independência
-
-A independência não pode ser confirmada por um gráfico se o desenho da coleta for desconhecido. Se vários registros vieram da mesma instituição financeira, agência ou período, talvez seja necessário um modelo hierárquico. Se as linhas estiverem ordenadas no tempo, avalie autocorrelação.
-
-```{r residuos-ordem, fig.height=4.4}
+```{r residuos-ordem, fig.height=4.4, fig.cap="Resíduos na ordem das observações."}
 ggplot(diag, aes(indice, .resid)) +
   geom_hline(yintercept = 0, color = cinza, linetype = 2) +
   geom_line(color = "#9FB4D1", linewidth = 0.55) +
   geom_point(color = azul, size = 1.5) +
   labs(
     title = "Resíduos na ordem das observações",
-    subtitle = "Só é informativo sobre dependência se a ordem tiver significado no desenho",
     x = "Ordem", y = "Resíduo"
   )
 ```
 
-### Investigando as observações sinalizadas
+O gráfico de resíduos na ordem das observações não apresenta padrões de autocorrelação visíveis: não há tendências, ciclos ou agrupamentos sistemáticos. Como não temos informação sobre a estrutura temporal ou de agrupamento da coleta, a independência não pode ser formalmente confirmada, mas também não encontramos evidência contra ela nos dados disponíveis.
+
+### Observações sinalizadas
 
 ```{r influentes}
 influentes <- augment(modelo_diagnostico, data = treino) |>
@@ -992,23 +826,24 @@ if (knitr::is_html_output()) {
                                 "valor_ajustado", "residuo", "residuo_padronizado",
                                 "alavancagem", "distancia_cook"), digits = 3)
 } else {
+  # Para PDF: remover colunas Limite e Saldo para caber na página
+  tabela_pdf <- tabela_influentes |>
+    select(id, student, renda, valor_ajustado, residuo,
+           residuo_padronizado, distancia_cook, sinalizada)
+  nomes_col_pdf <- c("ID", "Estud.", "Renda", "Ajustado",
+                     "Resíduo", "Res. padr.", "Dist. Cook", "Sinal.")
   knitr::kable(
-    tabela_influentes, digits = 3,
-    col.names = nomes_col,
-    caption = "Observações com maior distância de Cook"
+    tabela_pdf, digits = 3,
+    col.names = nomes_col_pdf,
+    caption = "Observações com maior distância de Cook",
+    booktabs = FALSE
   ) |>
-    kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
+    kable_styling(full_width = FALSE, font_size = 9,
                   latex_options = c("hold_position", "scale_down"))
 }
 ```
 
-::: {.warning}
-Distância de Cook acima de $4/n$ é um sinal para investigar, não uma ordem para excluir. Primeiro verifique erro de digitação, compatibilidade com a população e sensibilidade das conclusões com e sem o ponto.
-:::
-
-::: {.checkpoint}
-**Análise de sensibilidade, não seleção de modelo.** Os pontos abaixo são retirados apenas para verificar a estabilidade das conclusões. A comparação não deve ser usada para escolher um modelo com $R^2$ maior nem para justificar exclusões automáticas.
-:::
+Distância de Cook acima de $4/n$ é um sinal para investigar, não uma ordem para excluir. Para avaliar a estabilidade das conclusões, realizamos uma análise de sensibilidade retirando as observações sinalizadas.
 
 ```{r sensibilidade-influencia}
 ids_sensiveis <- influentes |>
@@ -1040,24 +875,29 @@ metricas_sensibilidade |>
                   latex_options = c("hold_position"))
 
 comparacao_sensibilidade <- bind_rows(
-  tidy(modelo_diagnostico) |> mutate(ajuste = "Todos os dados"),
-  tidy(modelo_sem_sensiveis) |> mutate(ajuste = "Sem pontos sinalizados")
+  tidy(modelo_diagnostico) |> mutate(ajuste = "Todos"),
+  tidy(modelo_sem_sensiveis) |> mutate(ajuste = "Sem sinal.")
 ) |>
-  select(ajuste, term, estimate, std.error) |>
-  pivot_wider(names_from = ajuste, values_from = c(estimate, std.error))
+  transmute(
+    termo = term,
+    ajuste,
+    estimativa = round(estimate, 3),
+    `erro-padrão` = round(std.error, 3)
+  )
 
-knitr::kable(comparacao_sensibilidade, digits = 3) |>
+comparacao_sensibilidade |>
+  pivot_wider(names_from = ajuste, values_from = c(estimativa, `erro-padrão`),
+              names_glue = "{ajuste}: {.value}") |>
+  knitr::kable(digits = 3) |>
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
-                  latex_options = c("hold_position"))
+                latex_options = c("hold_position", "scale_down"))
 ```
 
-Foram sinalizadas `r length(ids_sensiveis)` observações. Ao retirá-las apenas para esta análise de sensibilidade, o $R^2$ ajustado passa de `r fmt_num(summary(modelo_diagnostico)$adj.r.squared)` para `r fmt_num(summary(modelo_sem_sensiveis)$adj.r.squared)` e o erro residual passa de `r fmt_num(summary(modelo_diagnostico)$sigma)` para `r fmt_num(summary(modelo_sem_sensiveis)$sigma)`. Essa aparente "melhora" é esperada quando removemos pontos com resíduos maiores; ela **não** prova que o modelo sem esses clientes é melhor ou que eles devam ser excluídos.
-
-Os coeficientes permanecem próximos, como mostra a tabela. Portanto, o Modelo 4 ajustado com as `r nrow(treino)` observações de treinamento continua sendo o resultado principal. Uma observação só deveria ser removida se houver evidência independente de erro de registro, de que ela não pertence à população estudada ou uma regra definida antes da análise, nunca apenas por cruzar a linha laranja, ter resíduo grande ou ficar dentro/fora do envelope.
+Foram sinalizadas `r length(ids_sensiveis)` observações. Ao retirá-las, o $R^2$ ajustado passa de `r fmt_num(summary(modelo_diagnostico)$adj.r.squared)` para `r fmt_num(summary(modelo_sem_sensiveis)$adj.r.squared)` e o erro residual passa de `r fmt_num(summary(modelo_diagnostico)$sigma)` para `r fmt_num(summary(modelo_sem_sensiveis)$sigma)`. Essa aparente melhora é esperada quando removemos pontos com resíduos maiores e não prova que eles devam ser excluídos. Os coeficientes permanecem próximos, confirmando a estabilidade do Modelo 4.
 
 # Previsão e incerteza
 
-Com o Modelo 4 selecionado, podemos estimar o saldo devedor para novos valores de `Income`, `Limit` e `Student`. Os nomes e tipos das colunas no novo `data.frame` precisam coincidir com os usados no ajuste.
+Com o Modelo 4 selecionado, estimamos o saldo devedor para três perfis hipotéticos de clientes.
 
 ```{r modelo-final}
 modelo_final <- modelo4
@@ -1087,16 +927,11 @@ bind_rows(
                   latex_options = c("hold_position"))
 ```
 
-- **Intervalo de confiança da média:** captura a incerteza sobre o saldo médio esperado de todos os clientes com aquele conjunto de preditores.
-- **Intervalo de previsão:** captura a incerteza para um novo cliente individual; incorpora a variação residual e, por isso, é sempre mais amplo para os mesmos valores dos preditores.
-
-::: {.checkpoint}
-Para uma previsão individual, use o intervalo de previsão. Usar o intervalo de confiança da média nesse caso produz uma faixa estreita demais e aumenta a chance de não conter o valor individual observado.
-:::
+O **intervalo de confiança da média** captura a incerteza sobre o saldo médio esperado de todos os clientes com aquele perfil. O **intervalo de previsão** captura a incerteza para um novo cliente individual e é sempre mais amplo, pois incorpora a variação residual.
 
 # Avaliação no conjunto de teste
 
-Todo o percurso anterior foi realizado exclusivamente com o conjunto de **treinamento**. Agora aplicamos o Modelo 4 final ao conjunto de **teste**, `r nrow(teste)` clientes que o modelo ainda não teve acesso, para avaliar sua capacidade preditiva em novas amostras.
+Aplicamos o Modelo 4 ao conjunto de teste (`r nrow(teste)` clientes que não participaram do ajuste) para avaliar a capacidade preditiva em dados novos.
 
 ```{r avaliacao-teste}
 previsoes_teste <- predict(modelo4, newdata = teste)
@@ -1132,25 +967,21 @@ tibble(
   )
 ```
 
-::: {.checkpoint}
-O R² no teste mede o quanto da variância de `Balance` o modelo explica em clientes que **não participaram do ajuste**. Um R² alto e RQME próximo ao erro-padrão residual do treinamento indicam que o modelo generaliza bem e não está sobreajustado.
-:::
+Um R² alto no teste e RQME próximo ao erro-padrão residual do treinamento indicam que o modelo não está sobreajustado.
 
-# Conclusões finais
+# Conclusões
 
-## Síntese da exploração
+## Síntese
 
-A base contém `r nrow(dados)` clientes, sem valores ausentes. `Limit` e `Rating` são fortemente correlacionadas entre si ($r\approx`r fmt_num(cor(dados$Limit, dados$Rating))`$), o que explica a multicolinearidade observada no modelo completo. A exploração gráfica mostrou que, entre as variáveis categóricas, apenas `Student` separa marcantemente os saldos devedores; `Gender`, `Married` e `Ethnicity` não apresentaram diferenças visuais relevantes, o que foi confirmado pelos p-valores e testes F ao longo da simplificação. Entre as variáveis numéricas, `Education`, `Cards` e `Age` não mostraram contribuição significativa na presença de `Income` e `Limit`.
+A base contém `r nrow(dados)` clientes, sem valores ausentes. `Limit` e `Rating` são fortemente correlacionadas entre si ($r\approx`r fmt_num(cor(dados$Limit, dados$Rating))`$), o que explica a multicolinearidade observada no modelo completo. Entre as variáveis categóricas, apenas `Student` separa marcantemente os saldos devedores. As demais (`Gender`, `Married`, `Ethnicity`) não apresentaram diferenças relevantes, o que os p-valores e testes F confirmaram. Entre as variáveis numéricas, `Education`, `Cards` e `Age` não mostraram contribuição significativa na presença de `Income` e `Limit`.
 
-## Decisão e interpretação
+## Modelo selecionado e interpretação
 
-Partimos de um modelo completo com dez preditores e o simplificamos progressivamente, removendo a cada passo as variáveis que não contribuíam significativamente. A cada remoção, o $R^2$ ajustado permaneceu estável e os testes F confirmaram que os termos removidos não acrescentavam informação. O resultado é o **Modelo 4**, com apenas três preditores, todos significativos, interpretáveis e sem colinearidade. O Modelo 5 confirmou que trocar `Limit` por `Rating` produz ajuste equivalente, mas `Limit` é preferível pela interpretabilidade.
+Partimos de um modelo completo com dez preditores e o simplificamos progressivamente. A cada remoção, o $R^2$ ajustado permaneceu estável e os testes F confirmaram que os termos removidos não acrescentavam informação. O resultado é o Modelo 4, com três preditores, todos significativos, interpretáveis e sem colinearidade:
 
-No Modelo 4:
-
-- mantendo `Limit` e `Student` constantes, US$ 1.000 adicionais em `Income` estão associados a `r fmt_num(coef(modelo4)["Income"] * 1000)` dólares a **menos** em `Balance` — efeito negativo contraintuitivo que reflete uso proporcional do limite;
-- mantendo `Income` e `Student` constantes, US$ 1 adicional em `Limit` está associado a `r fmt_num(coef(modelo4)["Limit"])` dólares a mais em `Balance`;
-- controlando as variáveis financeiras, estudantes carregam em média `r fmt_num(coef(modelo4)["StudentYes"])` dólares a mais que não estudantes.
+- Mantendo `Limit` e `Student` constantes, US$ 1.000 adicionais em `Income` estão associados a `r fmt_num(coef(modelo4)["Income"] * 1000)` dólares a **menos** em `Balance`.
+- Mantendo `Income` e `Student` constantes, US$ 1 adicional em `Limit` está associado a `r fmt_num(coef(modelo4)["Limit"])` dólares a mais em `Balance`.
+- Controlando as variáveis financeiras, estudantes carregam em média `r fmt_num(coef(modelo4)["StudentYes"])` dólares a mais que não estudantes.
 
 ```{r conclusao-coeficientes}
 tabela_coeficientes(modelo4) |>
@@ -1158,19 +989,32 @@ tabela_coeficientes(modelo4) |>
   kable_styling(full_width = FALSE, bootstrap_options = c("striped", "hover"),
                   latex_options = c("hold_position"))
 ```
+## Limitações do modelo
 
-## Verificação final dos pressupostos
+Os gráficos de resíduos e o teste de normalidade dos erros, corroborado pela suspeita inicial de não linearidade dos dados, indica que um modelo linear simples pode não ser a melhor abordagem devido a natureza das variáveis:
 
-Os gráficos de resíduos e escala–localização foram inspecionados e o teste de Shapiro–Wilk apresentou p-valor `r fmt_num(teste_shapiro$p.value, 4)`. Os gráficos de alavancagem e distância de Cook foram examinados em conjunto e não revelaram uma observação isolada dominando completamente o modelo.
+### Assimetria do saldo devedor
 
-A independência não pode ser estabelecida apenas com a base. Se houver vários registros provenientes da mesma instituição, região ou período, seria necessário representar essa estrutura no modelo. As observações sinalizadas por influência também devem ser investigadas, não eliminadas automaticamente.
+Como é de se esperar do domínio, o saldo devedor é uma grandeza com alta assimetria, o zero é um valor muito mais comum e um modelo de predição que depende de dados simétricos naturalmente é prejudicado por essa natureza
 
-## Conclusão substantiva
+### Normalidade dos erros
 
-O saldo devedor do cartão de crédito está positivamente associado ao limite de crédito e à condição de estudante. A renda, depois de controlado o limite, apresenta associação negativa com o saldo: entre clientes com o mesmo limite, maior renda está ligada a menor endividamento. As demais variáveis disponíveis: classificação de crédito (removida por colinearidade com o limite), gênero, estado civil, etnia, anos de educação, número de cartões e idade não demonstraram contribuição independente significativa.
+Conforme o gráfico do QQ-Plot apontou, e o plot das previsões do modelo 4 confirmaram, os erros não são normais, existe uma clara tendência do modelo em subestimar saldos maiores e superestimar saldos próximos ou iguais a zero. Note que como os casos onde o saldo devedor é 0 são muito numerosos, esses causam um efeito de alavancagem reduzindo a inclinação da reta, o que causa esse efeito negativo mesmo na parte dos dados que pode ser explicada linearmente.
 
-A simplificação progressiva (de dez para três preditores sem perda de ajuste) ilustra um princípio central da modelagem: mais variáveis não significam necessariamente um modelo melhor. Um modelo parcimonioso, com poucas variáveis bem justificadas, é mais interpretável, mais estável e menos sujeito a sobreajuste. O Modelo 5, com `Rating` no lugar de `Limit`, mostrou que as duas variáveis colineares carregam informação equivalente, validando a escolha de `Limit` pela interpretabilidade.
+Note ainda que é possível se treinar um modelo que consegue performar bem nos casos com saldo devedor positivo ao ser treinado apenas considerando esses casos.
 
-As conclusões são **associativas, não causais**. A base Credit é observacional e não contém detalhes suficientes do desenho da coleta para sustentar afirmações de causa e efeito.
+## Alternativas ao modelo linear
+
+Dado a incapacidade do modelo linear em expressar a relação das outras variáveis com o saldo devedor, outras abordagens devem ser consideradas para melhor descrever a relação do saldo devedor com as outras variáveis, algumas possibilidades são:
+
+### Modelos não lineares
+
+Modelos não lineares como o perceptron podem representar relações não-lineares como a do saldo devedor perfeitamente, podendo se tornar o caminho ideal para esse caso
+
+### Modelos zero-inflados
+
+Modelos zero-inflados são modelos que expressam corretamente essa assimetria, na prática, existem dois modelos internos, sendo um dos modelos especializado em detectar se a amostra pertence ao grupo do zero, e caso não seja, um modelo linear para predizer o seu valor real.
+
+Considerando o desenho amostral da variável de saldo devedor, modelos lineares zero-inflados podem descrever de forma muito satisfatória essa variável.
 
 # Referências
